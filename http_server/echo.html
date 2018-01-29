@@ -87,8 +87,20 @@
             <fieldset class="gcode">
                 <legend>Send Gcode</legend>
         	<div>
-                Gcode: <input type="text" id="myMessage" name="myMessage" value="" onkeypress="return searchKeyPress(event);" ><br> <br>
+                Gcode: <input type="text" id="myMessage" name="myMessage" value="" onkeypress="return searchKeyPress(event);" >
                 <input type="button" id="blksend" onclick="sendMsg()" value="Send" />
+    	    <div>
+        	<div>
+                 <canvas id="mdiPosAdjust" width="150" hight="100" onmousemove="adjustPos(event)" onmousedown="setG0Cmd()" ></canvas> 
+                 <input type="text" id="adjustValueX"  value="0" onkeypress="return searchKeyPressSetAdjust(event);" >
+                 <input type="text" id="adjustValueY"  value="0" onkeypress="return searchKeyPressSetAdjust(event);" >
+
+                 <label id='lzup' >Z:</label>
+                 <input type="button" id="setZ" onclick="setZstatus()" value="Down" />
+
+                 <label id='lsetCor'>Set Coordinate:</label>
+                 <input type="button" id="setCor" onclick="setCoordinate('c')" value="curPosition" />
+                 <input type="button" id="setCorlast" onclick="setCoordinate('l')" value="lastPosition" />
     	    <div>
             
     	    </div>
@@ -126,7 +138,7 @@
     </form> 
     <form>
         <textarea id="myReceive" name="myReceive"
-            rows="20"  cols="110" maxlength="400" readonly=true
+            rows="12"  cols="105" maxlength="400" readonly=true
             wrap="hard">
             log.....
         </textarea><br>

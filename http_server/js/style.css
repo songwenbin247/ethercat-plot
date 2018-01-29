@@ -19,7 +19,7 @@ fieldset.mode#modeManual {
 	top: 60px;
 	left: 410px;  
 	width: 330px;
-	height: 140px;
+	height: 145px;
 	margin: 3px;
 }
 fieldset.mode#modeMdi {
@@ -27,7 +27,7 @@ fieldset.mode#modeMdi {
 	top: 250px;
 	left: 10px;  
 	width: 350px;
-	height: 180px;
+	height: 195px;
 	margin: 3px;
 }
 .gcode{
@@ -35,7 +35,7 @@ fieldset.mode#modeMdi {
 	top: 280px;
 	left: 20px;
 	width: 330px;
-	height: 140px;
+	height: 155px;
 }
 fieldset.mode#ModeAuto {
 	position: fixed;
@@ -43,7 +43,7 @@ fieldset.mode#ModeAuto {
 	left: 400px;  
 	float: left;
 	width: 350px;
-	height: 180px;
+	height: 195px;
 	margin: 3px;
 }
 .program{
@@ -51,7 +51,7 @@ fieldset.mode#ModeAuto {
 	top: 280px;
 	left: 410px;
 	width: 330px;
-	height: 140px;
+	height: 150px;
 }
 #clearLogId{
 	position: fixed;
@@ -68,6 +68,56 @@ fieldset.mode#ModeAuto {
 	height: 20px;
 	margin: 0;
 	transform-origin: 75px 75px;
+  }
+ #mdiPosAdjust{
+	position: fixed;
+	top: 340px;
+	left: 60px;
+	width: 150;
+	height: 100;	
+	border: chartreuse 1px solid;
+	background-color: white;
+  }
+ #adjustValueX{
+	position: fixed;
+	top: 425px;
+	left:215px;
+	width: 30px;
+	height: 20px;	
+  }
+ #lzUp{
+	position: fixed;
+	top: 340px;
+	left:230px;
+  }
+ #adjustValueY{
+	position: fixed;
+	top: 340px;
+	left:25px;
+	width: 30px;
+	height: 20px;	
+  }
+ #setZ{
+	position: fixed;
+	top: 340px;
+	left:270px;
+	width: 60px;
+	height: 20px;	
+  }
+ #lsetCor{
+	position: fixed;
+	top: 365px;
+	left:230px;
+  }
+ #setCor{
+	position: fixed;
+	top: 385px;
+	left:270px;
+  }
+ #setCorlast{
+	position: fixed;
+	top: 415px;
+	left:270px;
   }
  #axisPostion{
 	position: fixed;

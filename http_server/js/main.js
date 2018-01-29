@@ -57,6 +57,7 @@ var myWebSocket;
 				log(event);
                 if (!event.data.match("NAK")){
     		        document.getElementById("estop").disabled = false;
+        	        document.getElementById("login").disabled = true;
                     myWebSocket.onmessage = checkEstopAndMachineStaus_cb;  
                     myWebSocket.send("get estop" + '\r');
                 }
@@ -65,7 +66,7 @@ var myWebSocket;
                     myWebSocket.onmessage = log;
                 }
 			}
-        		myWebSocket.send("set enable nxp" + '\r');
+        	myWebSocket.send("set enable nxp" + '\r');
 		}
        }
        myWebSocket.send("hello nxp 1 0" + '\r');
@@ -541,7 +542,7 @@ var myWebSocket;
                 var num = event.data.split(" ")[1];
                 document.getElementById("LineNumber").value = num;
                 if (proStatus == "Running") {
-                    setTimeout(updateProStatus, 200);
+                    setTimeout(updateProStatus, 500);
                 }
                 updatePosition();
             }
@@ -574,7 +575,7 @@ function updatePosition(){
             myWebSocket.onmessage = log;
         }
     }
-   // sendCmd("get abs_act_pos ");    
+   //sendCmd("get abs_act_pos ");    
    sendCmd("get rel_act_pos ");    
 }
 
@@ -626,3 +627,91 @@ function updatePosition(){
    function disable_mode(id, is){
         $(id).each( function(i, item) { item.disabled = is});
    }
+
+    function adjustPos(evt) {
+        var canvas = document.getElementById("mdiPosAdjust");
+        var rect = canvas.getBoundingClientRect();
+        //var x = (evt.clientX - rect.left) / (rect.right - rect.left) * canvas.width;
+        //var y = (evt.clientY - rect.top) / (rect.bottom - rect.top) * canvas.height;
+        var x = (evt.clientX - rect.left) ;
+        var y = (evt.clientY - rect.top);
+        var cxt = canvas.getContext('2d');
+        var x1 = x * 2;
+        var y1 = (100 - y) * 2;
+        document.getElementById("adjustValueX").value = (x1 > 300) ? 300 : x1;
+        document.getElementById("adjustValueY").value = (y1 > 200) ? 200 : y1;
+        cxt.clearRect(0,0,canvas.width,canvas.height);
+        cxt.beginPath();
+        cxt.moveTo(x,100);
+        cxt.lineTo(x,y);
+        cxt.moveTo(0,y);
+        cxt.lineTo(x,y);
+        cxt.closePath();
+        cxt.stroke();
+        console.log("%d : %d", x,y)
+    }
+    function setG0Cmd()
+    {
+        var x = document.getElementById("adjustValueX").value;
+        var y = document.getElementById("adjustValueY").value;
+        myWebSocket.onmessage = function (event) {
+            log(event);
+            setTimeout(updatePosition, 1000);
+            setTimeout(updatePosition, 2000);
+            setTimeout(updatePosition, 3000);
+            setTimeout(updatePosition, 4000);
+        }
+        myWebSocket.send( "set mdi g53 g0 x" + x + " y"+ y + " z0 \r");
+
+    }
+    
+    var offsetX;
+    var offsetY;
+
+    function setCoordinate(c)
+    {
+        if (c == 'c'){
+            myWebSocket.onmessage = function(event){
+                log(event);
+                myWebSocket.onmessage = function(event){
+                    log(event);
+                    var pos = event.data.split(" ");
+                    myWebSocket.onmessage = function(event){
+                        log(event);
+                        setTimeout(updatePosition, 500);
+                        myWebSocket.onmessage = log;
+                        sendCmd("set mdi g55");
+                    }
+                    offsetX = pos[1];
+                    offsetY = pos[2];
+                    sendCmd("set mdi g10 l2 p2 x" + pos[1] + " y" + pos[2]);
+                }
+            }
+            sendCmd("get abs_act_pos "); 
+        }
+        else{
+            if (offsetX == undefined){
+                offsetX = '0';
+                offsetY = '0';
+            }
+            myWebSocket.onmessage = function(event){
+                log(event);
+                setTimeout(updatePosition, 500);
+                myWebSocket.onmessage = log;
+                sendCmd("set mdi g55");
+            }
+            sendCmd("set mdi g10 l2 p2 x" + offsetX + " y" + offsetY);
+
+        }   
+    }
+    function setZstatus(){
+        var str = document.getElementById("setZ").value;
+        if (str == "Up"){
+            sendCmd("set mdi g0 z0.1");
+            document.getElementById("setZ").value = "Down";
+        }
+        else {
+            sendCmd("set mdi g0 z-0.1");
+            document.getElementById("setZ").value = "Up";
+        }
+    }
