@@ -1,0 +1,85 @@
+fieldset.mode#modeManual {
+	position: fixed;
+	top: 40px;
+	left: 10px;  
+	width: 740px;
+	height: 180px;
+	margin: 3px;
+}
+.homed {
+	position: fixed;
+	top: 60px;
+	left: 20px;  
+	width: 330px;
+	height: 140px;
+	margin: 3px;
+}
+.jog {
+	position:fixed;
+	top: 60px;
+	left: 410px;  
+	width: 330px;
+	height: 140px;
+	margin: 3px;
+}
+fieldset.mode#modeMdi {
+	position: fixed;
+	top: 250px;
+	left: 10px;  
+	width: 350px;
+	height: 180px;
+	margin: 3px;
+}
+.gcode{
+	position: fixed;
+	top: 280px;
+	left: 20px;
+	width: 330px;
+	height: 140px;
+}
+fieldset.mode#ModeAuto {
+	position: fixed;
+	top: 250px;
+	left: 400px;  
+	float: left;
+	width: 350px;
+	height: 180px;
+	margin: 3px;
+}
+.program{
+	position: fixed;
+	top: 280px;
+	left: 410px;
+	width: 330px;
+	height: 140px;
+}
+#clearLogId{
+	position: fixed;
+	top: 530px;
+	left: 10px;
+}
+#myReceive{
+	position: fixed;
+	top: 540px;
+	left: 10px;
+}
+#speed{
+	width: 150px;
+	height: 20px;
+	margin: 0;
+	transform-origin: 75px 75px;
+  }
+ #axisPostion{
+	position: fixed;
+	top: 470px;
+	left:10px;
+	width: 730px;
+	height: 30px;	
+  }
+  .showPos{
+	 width: 80px; 
+  }
+[name=home]{
+	background-color: black;
+
+}

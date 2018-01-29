@@ -1,0 +1,628 @@
+var myWebSocket;
+
+
+    function connectToWS() {
+        var endpoint = document.getElementById("endpoint").value;
+        if (myWebSocket !== undefined) {
+            myWebSocket.close()
+        }
+        
+        myWebSocket = new WebSocket(endpoint);
+        
+        myWebSocket.onopen = function(evt) {
+    	    document.getElementById("b_endpoint").value = "disconnect";
+        	document.getElementById("b_endpoint").onclick = closeConn;
+        	document.getElementById("login").disabled = false;
+        	document.getElementById("shutdown").disabled = false;
+            console.log("onopen.");
+            connectToMachine()
+        };
+
+        myWebSocket.onclose = function(evt) {
+            console.log("onclose.");
+        };
+
+        myWebSocket.onerror = function(evt) {
+            console.log("Error!");
+        };
+        
+    }
+     function log(event) {
+        document.getElementById("myReceive").value += event.data;
+     }
+    
+    function checkEstopAndMachineStaus_cb(event){
+        log(event);
+        myWebSocket.onmessage = function (event){
+            log(event);
+            if(event.data.match("OFF")){
+    		    document.getElementById("machine").disabled = false;
+    		    document.getElementById("estop").value = "off";
+               verifyMachineStatus()               
+           }
+           else {
+               document.getElementById("machine").disabled = true;
+               upDateMachineStaus("off");
+    	    	document.getElementById("estop").value = "on";
+           }
+        }
+
+    }
+
+    function connectToMachine(){
+       myWebSocket.onmessage = function (event){
+		log(event);
+		if (event.data.slice(0, 9) == "HELLO ACK"){
+			myWebSocket.onmessage = function (event){
+				log(event);
+                if (!event.data.match("NAK")){
+    		        document.getElementById("estop").disabled = false;
+                    myWebSocket.onmessage = checkEstopAndMachineStaus_cb;  
+                    myWebSocket.send("get estop" + '\r');
+                }
+                else{
+    		        document.getElementById("estop").disabled = true;
+                    myWebSocket.onmessage = log;
+                }
+			}
+        		myWebSocket.send("set enable nxp" + '\r');
+		}
+       }
+       myWebSocket.send("hello nxp 1 0" + '\r');
+    } 
+
+    function sleep(delay) {
+        var start = new Date().getTime();
+        while (new Date().getTime() < start + delay);
+    }
+
+    function sendMsg() {
+        var message = document.getElementById("myMessage").value + '\r';
+        myWebSocket.onmessage = function (event) {
+            log(event);
+            setTimeout(updatePosition, 1000);
+            setTimeout(updatePosition, 2000);
+            setTimeout(updatePosition, 3000);
+            setTimeout(updatePosition, 4000);
+        }
+        myWebSocket.send( "set mdi " + message);
+        //myWebSocket.send( message);
+    }
+    
+    function sendCmd(str) {
+        var message = str + '\r';
+        myWebSocket.send(message);
+    }
+    
+    function setEstop() {
+        var sw = document.getElementById("estop").value;
+	    if (sw == "on")
+		    sw = "off";
+	    else
+	    	sw = "on"
+    	var mess = "set estop " + sw;
+        myWebSocket.onmessage = function (event){
+           log(event);
+    	    if (!event.data.match("NAK"))
+    		document.getElementById("estop").value = sw;
+    		if (sw == 'on') {	
+    			document.getElementById("machine").disabled = true;
+    			document.getElementById("machine").value = "off";
+            }
+            else
+    			document.getElementById("machine").disabled = false;
+            myWebSocket.onmessage = log;
+        }
+	    sendCmd(mess);
+    }
+  
+    function upDateMachineStaus(str) {
+        if (str == "on"){
+			document.getElementById("machine").value = "on";
+			document.getElementById("myMessage").disabled = false;
+			document.getElementById("blksend").disabled = false;
+			document.getElementById("homeTo").disabled = false;
+
+        }
+        else {
+			document.getElementById("machine").value = "off";
+			document.getElementById("myMessage").disabled = true;
+			document.getElementById("blksend").disabled = true;
+			document.getElementById("homeTo").disabled = true;
+        }
+    }
+    
+    function verifyMachineStatus(){
+        myWebSocket.onmessage = function getMachine(event){
+	        log(event);
+	        myWebSocket.onmessage = function getMachine(event){   
+	            log(event);
+		        if (event.data.match("OFF")){
+                    upDateMachineStaus("off");
+		        }
+		        else {
+                    upDateMachineStaus('on');
+                    updateHomingStatus();
+                }
+                //myWebSocket.onmessage = log;
+	        }
+        } 
+        sendCmd("get machine");
+    }
+        
+    function setMachine() {
+        var sw = document.getElementById("machine").value;
+	    if (sw == "on")
+	    	sw = "off";
+	    else
+	    	sw = "on"
+	    var mess = "set machine " + sw;
+	    sendCmd(mess);
+	    setTimeout(verifyMachineStatus, 500)
+    }
+	
+    function closeConn() {
+        myWebSocket.close();
+	document.getElementById("b_endpoint").value = "connect"
+	document.getElementById("b_endpoint").onclick = connectToWS;
+	document.getElementById("machine").disabled = true;
+	document.getElementById("estop").disabled = true;
+	document.getElementById("login").disabled = true;
+	document.getElementById("myMessage").disabled = true;
+	document.getElementById("blksend").disabled = true;
+    }
+   
+    function searchKeyPress(e)
+   {
+	    // look for window.event in case event isn't passed in
+	   e = e || window.event;
+	   if (e.keyCode == 13){
+		document.getElementById("blksend").click();
+		return false;
+	   }
+	return true;
+   }  
+   function searchKeyPressOpenFile(e)
+   {
+	    // look for window.event in case event isn't passed in
+	   e = e || window.event;
+	   if (e.keyCode == 13){
+		document.getElementById("blksend").click();
+		return false;
+	   }
+	return true;
+   }  
+   
+   function verifyHomingStatus(){
+        queryHomingTimerId = setInterval(queryHomingStatus, 1000);    
+    }
+
+    function updateHomingStatus(){
+        myWebSocket.onmessage = function(event){
+            log(event);
+            myWebSocket.onmessage = function(event){
+                log(event);
+                var j = 0;
+                var strs = event.data.split(" ");
+                var hd = new Array;
+                var j = 0;
+                hd.push(document.getElementById("labelhx"));
+                hd.push(document.getElementById("labelhy"));
+                hd.push(document.getElementById("labelhz"));
+                hd.push(document.getElementById("labelha"));
+                for (var i=1; i < 4; i++){
+                    if (strs[i] == "YES"){
+                        hd[i-1].style.color = "green";
+                        j += 1;
+                    }
+                    else {
+                        hd[i-1].style.color = "red";
+                    }
+                }
+
+                if (j == 3){
+                    hd[3].style.color = "green";
+                    allHomed = true;
+                    document.getElementById("moveLeft").disabled = true;
+                    document.getElementById("moveRight").disabled = true;
+                }
+                else {
+                    hd[3].style.color = "red"; 
+                    allHomed = false;
+                    document.getElementById("moveLeft").disabled = false;
+                    document.getElementById("moveRight").disabled = false;
+                }
+                document.getElementById("homeTo").disabled = false;
+                updateMode();
+
+                //myWebSocket.onmessage = log;
+            }
+        }   
+        document.getElementById("homeTo").disabled = true;
+        myWebSocket.send("get joint_homed " + "\r" );
+   }
+   
+   function queryHomingStatus(){
+        myWebSocket.onmessage = function(event){
+            log(event);
+            myWebSocket.onmessage = function(event){
+                log(event);
+                var j = 0;
+                var strs = event.data.split(" ");
+                var hd = new Array;
+                var j = 0;
+                var done = false;
+                hd.push(document.getElementById("labelhx"));
+                hd.push(document.getElementById("labelhy"));
+                hd.push(document.getElementById("labelhz"));
+                hd.push(document.getElementById("labelha"));
+                for (var i=1; i < 4; i++){
+                    if (strs[i] == "YES"){
+                        hd[i-1].style.color = "green";
+                        j += 1;
+                    }
+                    else {
+                        hd[i-1].style.color = "red";
+                    }
+                }
+
+                if (j == 3){
+                    hd[3].style.color = "green";
+                    allHomed = true;
+                    if (queryHomingAxis == 3){
+                        document.getElementById("homeTo").disabled = false;
+                        document.getElementById("moveLeft").disabled = true;
+                        document.getElementById("moveRight").disabled = true;
+                    }
+                }
+                else {
+                    hd[3].style.color = "red"; 
+                    document.getElementById("moveLeft").disabled = false;
+                    document.getElementById("moveRight").disabled = false;
+                    allHomed = false;
+                }
+                myWebSocket.onmessage = log;
+       
+                if (hd[queryHomingAxis].style.color == "green"){
+                    clearInterval(queryHomingTimerId);
+                    document.getElementById("homeTo").disabled = false;
+                    updatePosition();
+                }
+            }
+        }   
+        myWebSocket.send("get joint_homed " + "\r" );
+   }
+
+   var queryHomingTimerId;
+   var queryHomingAxis;
+   var allHomed;
+   var currectMode;
+   function setHome()
+   {
+	var axis  = document.getElementsByName("home");
+    var va;
+  	for (var i =0; i < axis.length; i++) {
+		if(axis[i].checked){
+            va = axis[i].value;
+			break;
+		}
+  	}
+    var ax = Number(va);
+    if (ax == 3) {
+        sendCmd("set home 0" );
+        sendCmd("set home 1" );
+        sendCmd("set home 2" );
+    }
+    else {
+        sendCmd("set home " + va);
+    }
+    document.getElementById("homeTo").disabled = true;
+    queryHomingAxis = ax;
+    setTimeout(verifyHomingStatus, 1000);    
+
+   }
+
+   function updateMode () {
+        myWebSocket.onmessage = function(event){
+            log(event);
+            myWebSocket.onmessage = function(event) {
+                log(event);
+                if (event.data.match("AUTO")){
+                    document.getElementById("modeManual").style.backgroundColor = "lightcoral";
+                    document.getElementById("modeMdi").style.backgroundColor = "lightcoral";
+                    document.getElementById("modeAuto").style.backgroundColor = "lawngreen";
+                    disable_mode("#modeManual", true);
+                    disable_mode("#modeMdi", true);
+                    disable_mode("#modeAuto", false);
+                    update_program();
+                    currectMode = "auto";
+                }
+                if (event.data.match("MDI")){
+                    document.getElementById("modeManual").style.backgroundColor = "lightcoral";
+                    document.getElementById("modeMdi").style.backgroundColor = "lawngreen";
+                    document.getElementById("modeAuto").style.backgroundColor = "lightcoral";
+                    disable_mode("#modeManual", true);
+                    disable_mode("#modeMdi", false);
+                    disable_mode("#modeAuto", true);
+                    myWebSocket.onmessage = log;
+                    currectMode = "mdi";
+                }
+                if (event.data.match("MANUAL")){
+                    document.getElementById("modeManual").style.backgroundColor = "lawngreen";
+                    document.getElementById("modeMdi").style.backgroundColor = "lightcoral";
+                    document.getElementById("modeAuto").style.backgroundColor = "lightcoral";
+                    disable_mode("#modeManual", false);
+                    disable_mode("#modeMdi", true);
+                    disable_mode("#modeAuto", true);
+                    currectMode = "manual";
+                    updatePosition();
+                }
+            }
+        }
+        sendCmd("get mode \r");
+    
+   }
+   function swToManual ()
+   {
+       if (allHomed == false){
+           alert("Please homed all axis farst!!");
+           return ;
+       }
+       if (currectMode == "auto" && proStatus != "Idle"){
+           alert("please waitting for Programming finished");
+            return;
+        } 
+        myWebSocket.onmessage = function(event){
+            log(event);
+            setTimeout(updateMode, 200);
+        }
+        sendCmd("set mode manual " + '\r');
+   }
+
+   function swToMdi ()
+   {
+       if (allHomed == false){
+           alert("Please homed all axis farst!!");
+           return ;
+       }
+       if (currectMode == "auto" && proStatus != "Idle"){
+           alert("please waitting for Programming finished");
+            return;
+        } 
+        myWebSocket.onmessage = function(event){
+            log(event);
+            setTimeout(updateMode, 200);
+        }
+        sendCmd("set mode mdi " + '\r');
+   }
+
+
+   function swToAuto ()
+   {
+       if (allHomed == false){
+           alert("Please homed all axis farst!!");
+           return ;
+       }
+        myWebSocket.onmessage = function(event){
+            log(event);
+            setTimeout(updateMode, 200);
+        }
+        sendCmd("set mode auto " + '\r');
+   }
+  
+    function searchKeyPressOpenfile(e)
+   {
+	    // look for window.event in case event isn't passed in
+	   e = e || window.event;
+	   if (e.keyCode == 13){
+		document.getElementById("autoOpen").click();
+		return false;
+	   }
+	return true;
+   } 
+   var proStatus;
+   var proStatusQueryTimer;
+   function autoOpenf()
+   {
+        var mes = document.getElementById("openFd").value;
+        var file = "/root/work/gcode/" + mes +'\r'+'\n';
+        myWebSocket.onmessage = function(event){
+            log(event);
+            setTimeout(function(){
+                 myWebSocket.onmessage = function(event){
+                     log(event);
+                     myWebSocket.onmessage = function(event) {
+                         log(event);
+                         var str = event.data.split(" ")[1];
+                         var varr = event.data.split("/");
+                         var fileName = varr[varr.length -1].replace(/(\r\n)/gm, "");
+                         if (str != file){
+                             if (str == undefined || varr.length == 1) {
+                                 programOpened = false;       
+                                 document.getElementById("autoOpen").style.color =  "blue";
+                                 document.getElementById("autoRun").disabled = true;
+                                 alert("open " + mes + " failed") ; 
+                                 return;
+                             }
+                             else {
+                                 document.getElementById("openFd").value = fileName;
+                                 alert("open " + mes + " failed, and will reopen the last file:" + fileName) ; 
+                             }
+                         }
+                         else {
+                             programOpened = true;       
+                             document.getElementById("autoOpen").style.color =  "green";
+                             document.getElementById("autoRun").disabled = false;
+                         }
+                         myWebSocket.onmessage = log;
+                     }
+                 }
+                 sendCmd("get program" + "\r");}, 200);
+        }
+        sendCmd("set open /root/work/gcode/" + mes + "\r");
+   }
+   var programOpened;
+   function update_program() {
+        myWebSocket.onmessage = function(event){
+            log(event);
+            myWebSocket.onmessage = function(event) {
+                log(event);
+                var str = event.data.split("/");
+                var fileName = str[str.length -1].replace(/(\r\n)/gm, "");
+                if (fileName != undefined && str.length != 1){
+                        document.getElementById("openFd").value = fileName;
+                        programOpened = true;       
+                        document.getElementById("autoOpen").style.color =  "green";
+                }
+                else { 
+                    programOpened = false;
+                    document.getElementById("autoOpen").style.color =  "blue";
+                }
+                updateProStatus();
+            }
+        }
+        sendCmd("get program" + "\r");
+   }
+
+   function updateProStatus(){
+        myWebSocket.onmessage = function(event){
+            log(event);
+            myWebSocket.onmessage = function(event){
+                log(event);
+                if (event.data.match("IDLE")) {
+                    document.getElementById("proStatus").value = "Idle";
+                    proStatus = "Idle";
+                    if (programOpened)
+                        document.getElementById("autoRun").disabled = false;
+                    else
+                        document.getElementById("autoRun").disabled = true;
+
+                    document.getElementById("autoPause").disabled = true;
+                    document.getElementById("autoResume").disabled = true;
+                    document.getElementById("autoAbort").disabled = true;
+                }
+                else if (event.data.match("RUNNING")) {
+                    document.getElementById("proStatus").value = "Running";
+                    proStatus = "Running";
+                    document.getElementById("autoRun").disabled = true;
+                    document.getElementById("autoPause").disabled = false;
+                    document.getElementById("autoResume").disabled = true;
+                    document.getElementById("autoAbort").disabled = false;
+
+                }
+                else if( event.data.match("PAUSED")) {
+                    document.getElementById("proStatus").value = "paused";
+                    proStatus = "paused";
+                    document.getElementById("autoRun").disabled = true;
+                    document.getElementById("autoPause").disabled = true;
+                    document.getElementById("autoResume").disabled = false;
+                    document.getElementById("autoAbort").disabled = false;
+                }
+                updateLines();
+            }
+        }
+        sendCmd("get program_status");
+   }
+   function autoFun(mes)
+   {
+        myWebSocket.onmessage = function(event){
+            log(event);
+            setTimeout(updateProStatus, 200); 
+               
+        }
+        sendCmd("set " + mes);
+   }
+
+  function updateLines() {
+        myWebSocket.onmessage = function(event) {
+            log(event);
+            myWebSocket.onmessage = function(event){
+                log(event);
+                var num = event.data.split(" ")[1];
+                document.getElementById("LineNumber").value = num;
+                if (proStatus == "Running") {
+                    setTimeout(updateProStatus, 200);
+                }
+                updatePosition();
+            }
+
+        }
+        sendCmd("get program_line");
+  }
+
+  function updateSpeed(){
+        var speed = document.getElementById("speed").value;
+        document.getElementById("speedValue").textContent = speed;
+  }
+
+  function powerOff() {
+      sendCmd("shutdown");
+      closeConn();
+  }
+function updatePosition(){
+    myWebSocket.onmessage = function(event){
+        log(event);
+        myWebSocket.onmessage = function(event){
+            log(event);
+            var pos = event.data.split(" ");
+            document.getElementById("posX").value = pos[1];
+            document.getElementById("posY").value = pos[2];
+            document.getElementById("posZ").value = pos[3];
+            if (queryPosOn == true ){
+                setTimeout(updatePosition, 200);
+            }
+            myWebSocket.onmessage = log;
+        }
+    }
+   // sendCmd("get abs_act_pos ");    
+   sendCmd("get rel_act_pos ");    
+}
+
+  var queryPosOn;
+  function moveAxisStart(dir){
+      var speed = document.getElementById("speedValue").textContent;
+      if (dir == "Left"){
+          speed = "-" + speed;
+      }
+	  var axis  = document.getElementsByName("jog");
+      var va;
+  	  for (var i =0; i < axis.length; i++) {
+		if(axis[i].checked){
+            va = i;
+			break;
+		}
+      }
+      myWebSocket.onmessage = function(event){
+          log(event);
+          queryPosOn = true;
+          setTimeout(updatePosition, 200);
+          myWebSocket.onmessage = log;
+      }
+      sendCmd("set jog " + va + " " + speed);
+  }
+  
+  function moveAxisStop(dir){
+	  var axis  = document.getElementsByName("jog");
+      var va;
+  	  for (var i =0; i < axis.length; i++) {
+		if(axis[i].checked){
+            va = i;
+			break;
+        }
+       }
+        myWebSocket.onmessage = function(event){
+          log(event);
+          queryPosOn = false;
+          setTimeout(updatePosition, 500);
+          myWebSocket.onmessage = log;
+        }
+        sendCmd("set jog_stop " + va);
+    }
+
+   function clearLog()  {
+        document.getElementById('myReceive').value = '            log.....';
+   }
+
+   function disable_mode(id, is){
+        $(id).each( function(i, item) { item.disabled = is});
+   }

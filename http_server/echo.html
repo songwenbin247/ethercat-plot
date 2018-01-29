@@ -1,0 +1,137 @@
+<html>
+<head>
+    <link rel="stylesheet" href="js/style.css"></head></link>
+    <script src="js/main.js"></script>
+    <script src="js/jquery-1.10.2.js"></script>
+</head>
+<body>
+
+    <form>
+        WebSock: <input type="text" id="endpoint" name="endpoint" value="ws://10.193.20.92:5007"  style="width: 200px" >
+        <input type="button" id="b_endpoint" onclick="connectToWS()" value="connect" >
+    	login: <input type="button" id="login" onclick="connectToMachine()" value="login" disabled = true/>
+    	Estop: <input type="button" id="estop" onclick="setEstop()" value="on" disabled = true/>
+    	machine: <input type="button" id="machine" onclick="setMachine()" value="off" disabled = true/>
+    	shutdown: <input type="button" id="shutdown" onclick="powerOff()" style="background-color: crimson" value="  " disabled = true/><br>
+    </form>
+    <form>
+        <fieldset class="mode" id="modeManual" style="background-color:lawngreen" >
+            <legend style="color:black" onclick="swToManual()" > Manual </legend>
+            <fieldset class="homed">
+                <legend>Select an axis to home</legend>
+        	        <div>
+                       <input type="radio" id="all" name="home" value="3" checked />
+                       <label for="all"  id='labelha' style="color: red">All</label>
+
+                        <input type="radio" id="xx" name="home" value="0"/>
+                        <label for="xx" id='labelhx' style="color: red">X</label>
+            
+                        <input type="radio" id="yy" name="home" value="1"/>
+                        <label for="yy" id='labelhy' style="color: red">Y</label>
+            
+                        <input type="radio" id="zz" name="home" value="2">
+                        <label for="zz" id="labelhz" style="color: red" >Z</label>
+                    </div><br>
+                    <div>
+                    <input type="button", id="homeTo" value="Home" onclick="setHome()" disabled=true>
+    	            </div>
+            </fieldset>
+            
+            <fieldset class="jog">
+                <legend>jog</legend>
+        	<div>
+                    <input type="radio" id="jx" name="jog" value="0" checked/>
+                    <label for="jx" id='labelhx' style="color: red">X</label>
+            
+                    <input type="radio" id="jy" name="jog" value="1"/>
+                    <label for="jy" id='labelhy' style="color: red">Y</label>
+            
+                    <input type="radio" id="jz" name="jog" value="2">
+                    <label for="jz" id="labelhz" style="color: red" >Z</label>
+            </div>
+            <div>
+                <label for="speed">Speed:</label>
+                <input type="range" id="speed" name="Speed" 
+                       min="0" max="10000" value="2000" list="SpeedSelec" onchange="updateSpeed()"/>
+                <span id="speedValue">2000</span>
+
+                <datalist id="SpeedSelec">
+                  <option value="0" label="0%">
+                  <option value="100">
+                  <option value="200">
+                  <option value="300">
+                  <option value="400">
+                  <option value="500">
+                  <option value="1000" label="10%">
+                  <option value="2000">
+                  <option value="3000">
+                  <option value="4000">
+                  <option value="5000">
+                  <option value="6000">
+                  <option value="7000">
+                  <option value="8000">
+                  <option value="9000">
+                  <option value="10000" label="100%">
+                </datalist>
+            </div>
+    	    <div> <br>
+            <input type="button" id="moveLeft" value="<---" onmousedown="moveAxisStart('Left')" onmouseup="moveAxisStop()" disabled=false>
+            <input type="button" id="moveRight" value="--->" onmousedown="moveAxisStart('Right')" onmouseup="moveAxisStop()" disabled=false>
+            
+    	    </div>
+            </fieldset>
+
+        </fieldset>
+        <fieldset class="mode" id="modeMdi" style="background-color:lightcoral" disbaled = true >
+            <legend  style="color:black" onclick="swToMdi()"> Mdi </legend>
+            <fieldset class="gcode">
+                <legend>Send Gcode</legend>
+        	<div>
+                Gcode: <input type="text" id="myMessage" name="myMessage" value="" onkeypress="return searchKeyPress(event);" ><br> <br>
+                <input type="button" id="blksend" onclick="sendMsg()" value="Send" />
+    	    <div>
+            
+    	    </div>
+            </fieldset>
+
+        </fieldset>
+        <fieldset class="mode" id="modeAuto" style="background-color:lightcoral">
+            <legend style="color:black" onclick="swToAuto()"> Auto </legend>
+            <fieldset class="program">
+                <legend>Programing</legend>
+        	<div>
+                Open: <input type="text" id="openFd" name="openFd" value="" onkeypress="return searchKeyPressOpenfile(event);" >
+                 <input type="button" id= "autoOpen" onclick="autoOpenf()" value="Open">  <br><br>
+                <input type="button" id="autoRun" onclick="autoFun('run 0')" value="Run" disabled = true/>
+                <input type="button" id="autoPause" onclick="autoFun('pause')" value="Pause" disbale = true/>
+                <input type="button" id="autoResume" onclick="autoFun('resume')" value="Resume" disabled = true/>
+                <input type="button" id="autoAbort" onclick="autoFun('abort')" value="Abort" disabled = true/><br><br>
+                Status: <input type="text" id="proStatus"  value="Idle" readonly=true style="width: 50px" style="color:mediumaquamarine"/>
+                Line: <input type="text" id="LineNumber"  value="0" readonly=true style="width: 50px" style="color:mediumaquamarine"/>
+            
+    	    </div>
+            </fieldset>
+
+        </fieldset>
+        <fieldset id="axisPostion" style="background-color: mediumaquamarine">
+            <legend style="color:black" > Postions </legend>
+    	    <div>
+                X: <input type="button" class = "showPos" id="posX" value="0" readonly=true>
+                Y: <input type="button" class = "showPos" id="posY" value="0" readonly=true>
+                Z: <input type="button" class = "showPos" id="posZ" value="0" readonly=true>
+    	    </div>
+        </fieldset>
+    </form>
+    <form>
+    </form> 
+    <form>
+        <textarea id="myReceive" name="myReceive"
+            rows="20"  cols="110" maxlength="400" readonly=true
+            wrap="hard">
+            log.....
+        </textarea><br>
+        <input type="button" id="clearLogId" onclick="clearLog()" value="clear" />
+    </form>
+
+</body>
+</html>
