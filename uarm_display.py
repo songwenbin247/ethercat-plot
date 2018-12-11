@@ -23,7 +23,7 @@ running = 1
 # 1 : Green
 # 2 : Yellow
 # 3 : Blue
-color=1
+color=0
 color_str=["Red", "Green", "Yellow", "Blue"]
 
 #Receive the blocks coordinates sending from OpenMV.
@@ -137,27 +137,82 @@ class Uarm_states(Enum):
 
 black_list={}
 blacks_index = 0
+#   (150, -180)  70     70        80       70         70    (150 , 180)
+#           |-----------------------------------------------|
+#           |         |         |       |         |         |
+#           |    0    |    1    |    2  |    3    |    4    | 50
+#           |         |         |       |         |         |
+#           |-----------------------------------------------|
+#           |         |         |       |         |         |
+#           |    9    |    8    |    7  |    6    |    5    | 65
+#           |         |         |       |         |         |
+#           |-----------------------------------------------|
+#           |         |         |       |         |         |
+#           |    10   |   11    |   12  |   13    |   14    |  65
+#           |         |         |       |         |         |
+#           |-----------------------------------------------|
 
-scan_grid = [[175,0,140],[160,-100,140],[250,-90,140],[260,0,140],[250,90,140],[160,100,140]]
+machine_grid = [[175,-145,140],[175,-45,140],[175, 0,140],[175,  45,140],[175, 145,140],
+             [235, 145,140],[235, 45,140],[235, 0,140],[235, -45,140],[235,-145,140],
+             [300,-145,140],[300,-45,140],[300, 0,140],[300,  45,140],[300, 145,140]]
+scan_grid = []
 c_step = 0
+def map_to_grid(v, D=25):
+    if not len(scan_grid):
+        for i in machine_grid:
+            a = math.atan2(i[1], i[0])
+            scan_grid.append([i[0] - D*math.cos(a), i[1] - D*math.sin(a), i[2]])
+        print("scan_grid:", scan_grid)
+    if v[0] < 200:
+        i = 0
+    elif v[0] > 265:
+        i = 2
+    else:
+        i = 1
 
+    if v[1] > 40:
+        if v[1] > 110:
+            j = 4
+        else: 
+            j = 3
+    elif v[1] < -40:
+        if v[1] < -110:
+            j = 0
+        else:
+            j = 1
+    else:
+        j = 2
+
+    k = i * 5 + j
+    if k == 9:
+        k = 5  
+    elif k == 5:
+        k = 9
+    elif k == 8:
+        k = 6
+    elif k == 6:
+        k = 8
+    return k
 
 # Some coordenates is not legal, so we could add them to black list to avoid checking it every time.  
 def black_list_add(v, scan_pos):  
     global blacks_index
     black_list[blacks_index] = [v, c_step, scan_pos]
     blacks_index += 1
+    print("black_list_add ", v, scan_pos)
 
 # If a coordenates in black list is not found within the last 3 times, remove it to black list.  
 def black_list_update():
     global black_list
     for e in black_list.keys():
         if c_step - black_list[e][1] > 2:
+            print("black_list_update", black_list[e])
             del black_list[e]
 
 #Check whether a coordenates is in black list.
 def black_list_check(v, scan_pos):
     global black_list
+    print("black_check:", v)
     for e in black_list.keys():
         if black_list[e][2] == scan_pos:
             v0=[[black_list[e][0][0], v[0]], [black_list[e][0][1], v[1]]]
@@ -185,48 +240,76 @@ def black_list_check(v, scan_pos):
 #   B  : Blue
 
 
-def get_a_co(scan_pos=None ,segment_index=2 ,timeout=1.5):
+def get_a_co(scan_pos=None ,segment_index=2 ,timeout=1, isConfirm = None):
     while (not datq.empty()):
         datq.get()
     gev.clear()
     sev.set()
-    gev.wait(5)
+    gev.wait(timeout)
     if not gev.isSet():
-        return [1000, 1000]
-    data=datq.get().split('*')
-    data = data[segment_index].split('/')[color].split('.')[1:]
+        return None
+    try:
+        data=datq.get().split('*')
+        data = data[segment_index].split('/')[color].split('.')[1:]
+    except:
+        return None
+    
     print("get data:", data)
+    ret = []
     for dat in data:
         dat = dat.split(':')
-        y = int(dat[1])   / -2.1  
-        x = int(dat[3]) / -2.1
+        try:
+            y = int(dat[1])   / -2.0  
+            x = int(dat[3]) / -2.4
+        except:
+            continue
+
         if segment_index == 1:
             x = x * 1.5     
             y = y * 1.25
         if scan_pos is not None:
             if not black_list_check([x, y], scan_pos):
-                return [x, y]
+                ret.append([x, y])
             else:
-                return [1000,1000]
+                continue
         else:
-            return [x, y]
-    return [1000,1000] 
+            ret.append([x, y])
+    if isConfirm is None:
+        if len(ret):
+            return ret[0]
+        else:
+            return None
+    
+    li = [math.pow(c[0], 2)+ math.pow(c[1], 2) for c in ret]
+    if not len(li):
+        return None
+    return ret[li.index(min(li))]
+    
+def get_coordenate(scan_pos=None, isConfirm = None):
+    time.sleep(1) 
+    cos = [get_a_co(scan_pos, isConfirm=isConfirm) for i in range(10)]
+    cos = filter(lambda c: c is not None, cos)
+    if len(cos) < 3:
+        return []
 
-def get_coordenate(scan_pos=None):
-    co3 = get_a_co()
-    co4 = get_a_co()
-    co5 = get_a_co()
-    co1 = get_a_co(scan_pos)
-    co2 = get_a_co(scan_pos) 
-    v=[[co1[0], co2[0]], [co1[1], co2[1]]]
-    co=[]
-    print("get co", co3, co4, co5, co1, co2)
-    if is_almost_equal(v) and co1 != [1000, 1000]:
-        co=[(co1[0] + co2[0]) / 2.0, (co1[1] + co2[1]) / 2.0,]
-    return co
+    th = int(len(cos) * 2 / 3)
+    for c in cos:
+        li = [math.pow(c[0] - i[0],2) + math.pow(c[1] - i[1],2) for i in cos]
+        if len(filter(lambda i: i < 25, li)) < th:
+            print("remove from cos", c)
+            cos.remove(c)
+    if not len(cos):
+        return []
+    print("cos", cos)
+    co = [0, 0]
+    for c in cos:
+        co[0] += c[0]
+        co[1] += c[1]
+    
+    return [co[0]/ len(cos), co[1] / len(cos)]
 
 
-def get_coordenates(segment_index=1, timeout=3):
+def get_cos(segment_index=1, timeout=1):
     while (not datq.empty()):
         datq.get()
     gev.clear()
@@ -240,14 +323,26 @@ def get_coordenates(segment_index=1, timeout=3):
     data = data[segment_index].split('/')[color].split('.')[1:]
     for dat in data:
         dat = dat.split(':')
-        y = int(dat[1])   / -2.1  
-        x = int(dat[3]) / -2.1
+        try:
+            y = int(dat[1])   / -2.0  
+            x = int(dat[3]) / -2.4
+        except:
+            continue
+
         if segment_index == 1:
             x = x * 1.5     
             y = y * 1.25
     	cos.append([x,y])
     return cos
 	
+
+def get_coordenates(segment_index=1, timeout=3):
+    v = []
+    time.sleep(1) 
+    for i in range(3):
+        v = v + get_cos(segment_index,timeout)
+    return v
+
 
 def signal_exit_handler(signum, frame):
     global pipe_w
@@ -388,7 +483,7 @@ def position_check(ver):
                     return False
     return True
 
-def move_to(v, speed=16000):
+def move_to(v, speed=5000):
     c.mdi("g1 x" + "%f" % (v[0]) + " y" + "%f" % (v[1]) + " z"+ "%f" % (v[2]) + " f" + str(speed))
     print("g1 x" + str(v[0]) + " y" + str(v[1]) + " z"+ str(v[2]) + " f" + str(speed))
     c.wait_complete()
@@ -408,7 +503,7 @@ def position_get(isPoll=True):
     return [s.position[0:3], s.joint_actual_position[0:3]]
 
 
-def co_calc(v, sin, cos, p, D=30, isComfirm=None):
+def co_calc(v, sin, cos, p, D=25, isComfirm=None):
     if isComfirm is None:
         x=p[0][0] + D*cos + (v[0] ) *cos - (v[1] ) * sin
         y=p[0][1] + D*sin + (v[1] )* cos +  (v[0] ) * sin
@@ -436,9 +531,8 @@ de_top=220
 de_speed=5000
 de_pos={0:("g0",230,0,de_top, 10000), 
        1:("g16", -10, de_speed),
-       2:("g16", 0, de_speed),
-       3:("g16", 10, de_speed),
-       4:("g16", 0, de_speed),
+       2:("g16", 10, de_speed),
+       3:("g16", 0, de_speed),
        }
 de_step = 0
 def detection_move():
@@ -458,30 +552,17 @@ def action_detect():
     global uarm_state
     global scan_list
     global detection_pos_return_to
-    detection_move()
-    co_list = get_coordenates(); 
-    print("co_list", co_list)
-    if (len(co_list)):
-        p = position_get();
-        machine_list = get_machine_coordenates(co_list, p)
+    machine_list = []
+    for i in range(len(de_pos) - 1):
+        detection_move()
+        co_list = get_coordenates(); 
+        print("co_list", co_list)
+        if (len(co_list)):
+            p = position_get();
+            machine_list += get_machine_coordenates(co_list, p)
+    if len(machine_list):        
         print("machine_list", machine_list)
-        scan_list_t = []
-        for l in machine_list:
-            if (l[1] > 50):
-                if (l[0] > 230):
-                    scan_list_t.append(4)
-                else:
-                    scan_list_t.append(5)
-            elif (l[1] < -50):
-                if (l[0] > 230):
-                    scan_list_t.append(2)
-                else:
-                    scan_list_t.append(1)
-            else:
-                if (l[0] > 250):
-                    scan_list_t.append(3)
-                else:
-                    scan_list_t.append(0)
+        scan_list_t = [map_to_grid(n) for n in machine_list]
         scan_list_t.sort()
         c=None
         for l in scan_list_t:
@@ -520,33 +601,34 @@ def action_scan():
         uarm_state=Uarm_states.SCAN
         return
 
-    if math.fabs(cor[0]) > 30 or math.fabs(cor[1]) > 40:
+    if math.fabs(cor[0]) > 30 or math.fabs(cor[1]) > 30:
         x, y = get_machine_coordenate(cor, isComfirm=True)
         confirm_pos=[[x, y, scan_grid[scan_pos][2]], cor, scan_pos]
         uarm_state=Uarm_states.CONFIRM
     else:
         x, y = get_machine_coordenate(cor)
         if not position_check([x,y]):
-            black_list_add([x ,y], scan_pos)
+            black_list_add(cor, scan_pos)
             uarm_state=Uarm_states.SCAN
         else:
             down_pos = [[x,y,scan_grid[scan_pos][2]], cor, scan_pos]
             print("down_pos ", down_pos)
             uarm_state=Uarm_states.DOWN
+    print("x, y", x, y)
 
 def action_confirm():
     global uarm_state
     global confirm_pos
     global down_pos
     move_to(confirm_pos[0])
-    cor = get_coordenate()
+    cor = get_coordenate(isConfirm=True)
 
     if not len(cor):
         black_list_add(confirm_pos[1], confirm_pos[2])
         uarm_state=Uarm_states.SCAN
         return
     
-    if math.fabs(cor[0]) > 30 or math.fabs(cor[1]) > 40:
+    if math.fabs(cor[0]) > 30 or math.fabs(cor[1]) > 30:
         x, y = get_machine_coordenate(cor, isComfirm=True)
         confirm_pos[0][0]=x
         confirm_pos[0][1]=y
@@ -555,7 +637,7 @@ def action_confirm():
         x, y = get_machine_coordenate(cor)
         if not position_check([x,y]):
             black_list_add(confirm_pos[1], confirm_pos[2])
-            uarm_state=Uarm_states.SACN
+            uarm_state=Uarm_states.SCAN
         else:
             down_pos = [[x,y,confirm_pos[0][2]], confirm_pos[1], confirm_pos[2]]
             uarm_state=Uarm_states.DOWN
