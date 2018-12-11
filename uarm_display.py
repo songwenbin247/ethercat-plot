@@ -157,7 +157,7 @@ machine_grid = [[175,-145,140],[175,-45,140],[175, 0,140],[175,  45,140],[175, 1
              [300,-145,140],[300,-45,140],[300, 0,140],[300,  45,140],[300, 145,140]]
 scan_grid = []
 c_step = 0
-def map_to_grid(v, D=25):
+def map_to_grid(v, D=30):
     if not len(scan_grid):
         for i in machine_grid:
             a = math.atan2(i[1], i[0])
@@ -259,14 +259,14 @@ def get_a_co(scan_pos=None ,segment_index=2 ,timeout=1, isConfirm = None):
     for dat in data:
         dat = dat.split(':')
         try:
-            y = int(dat[1])   / -2.0  
-            x = int(dat[3]) / -2.4
+            y = int(dat[1])   / -2.2  
+            x = int(dat[3]) / -2.5
         except:
             continue
 
         if segment_index == 1:
-            x = x * 1.5     
-            y = y * 1.25
+            x = x / 0.6     
+            y = y / 0.69
         if scan_pos is not None:
             if not black_list_check([x, y], scan_pos):
                 ret.append([x, y])
@@ -458,7 +458,7 @@ S_ANGLE_2 = 40 * math.pi / 180
 k = (math.cos(S_ANGLE_1) * R_MAX - math.cos(S_ANGLE_2) * R_MIN) / (math.sin(S_ANGLE_1) * R_MAX - math.sin(S_ANGLE_2) * R_MIN)
 b = math.cos(S_ANGLE_1) * R_MAX - k * math.sin(S_ANGLE_1) * R_MAX 
 
-def position_check(ver):
+def position_check_1(ver):
     r0 = math.atan2(ver[1] , ver[0])
     d2 = math.pow(ver[0], 2) + math.pow(ver[1], 2)
     if math.fabs(r0) > S_ANGLE_2:
@@ -483,6 +483,19 @@ def position_check(ver):
                     return False
     return True
 
+def position_check(ver):
+    if math.fabs(ver[1]) > 180:
+        return False
+    if ver[0] < 150:
+        return False
+    if ver[0] < 276: # math.cos(math.asin(180/330.0))*330 = 276
+        return True
+
+    r0 = math.cos(math.asin(ver[1] / 330)) * 330
+    if ver[0] > r0:
+        return False
+    return True
+
 def move_to(v, speed=5000):
     c.mdi("g1 x" + "%f" % (v[0]) + " y" + "%f" % (v[1]) + " z"+ "%f" % (v[2]) + " f" + str(speed))
     print("g1 x" + str(v[0]) + " y" + str(v[1]) + " z"+ str(v[2]) + " f" + str(speed))
@@ -503,29 +516,35 @@ def position_get(isPoll=True):
     return [s.position[0:3], s.joint_actual_position[0:3]]
 
 
-def co_calc(v, sin, cos, p, D=25, isComfirm=None):
+def co_calc(v, sin, cos, p, D=30, isComfirm=None, isDetect = None):
     if isComfirm is None:
         x=p[0][0] + D*cos + (v[0] ) *cos - (v[1] ) * sin
         y=p[0][1] + D*sin + (v[1] )* cos +  (v[0] ) * sin
     else:
         x=p[0][0]  + (v[0] ) *cos - (v[1] ) * sin
         y=p[0][1]  + (v[1] )* cos +  (v[0] ) * sin
-        
+    
+    if isDetect is None:
+        x -= 5
+        y += 2.5
+    else:
+        x -= 10
+        y += 5
     return [x,y]
 
-def get_machine_coordenates(vs, p=None):
+def get_machine_coordenates(vs, p=None,isComfirm=None, isDetect = None):
     if p==None:
         p=position_get();
     cos = math.cos(p[1][0] * math.pi / 180)
     sin = math.sin(p[1][0] * math.pi / 180) 
-    return [co_calc(v,sin,cos, p) for v in vs]
+    return [co_calc(v,sin,cos, p,isComfirm=isComfirm ,isDetect = isDetect) for v in vs]
 
-def get_machine_coordenate(v, p=None, isComfirm=None):
+def get_machine_coordenate(v, p=None, isComfirm=None, isDetect = None):
     if p==None:
         p=position_get();
     cos = math.cos(p[1][0] * math.pi / 180)
     sin = math.sin(p[1][0] * math.pi / 180)
-    return co_calc(v, sin, cos, p, isComfirm=isComfirm)
+    return co_calc(v, sin, cos, p, isComfirm=isComfirm, isDetect = isDetect)
 
 de_top=220
 de_speed=5000
