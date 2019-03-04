@@ -62,7 +62,7 @@ def receive_coordinate (datq, sev, gev,pipe_r):
                         inputs[0].close()
                         exit(0)
             else:
-                data = s.recv(32)
+                data = s.recv(24)
                 if data:
                     if data[0] == 'C': #set the color to filte 
                         print(data)
@@ -72,25 +72,27 @@ def receive_coordinate (datq, sev, gev,pipe_r):
                             color = 1
                         elif data[2:6] == 'Blue':
                             color = 3
-                        else:
+                        elif data[2:5] == 'Red':
                             color = 0
+                        else:
+                            color = color
                         print("Switch the color to: %s" % color_str[color])
                     else:
- 			data_s += data
-			if find_head == 0:
-        			index_h = data_s.find("S")
-        			if index_h >= 0:
-            				find_head = 1
-            				data_s = data_s[index_h:]
-    			if find_head == 1:
-        			index_e = data_s.find("E")
-        			if index_e >= 0:
-            				find_head = 0
-                        		if sev.isSet():
-                        			sev.clear()
-                        			datq.put(data_s[:index_e])
-                        			gev.set()
-            				data_s = data_s[index_e:]
+                        data_s += data
+    		        if find_head == 0:
+            	    	    index_h = data_s.find("S")
+            	    	    if index_h >= 0:
+                    		    find_head = 1
+                    		    data_s = data_s[index_h:]
+        	    	if find_head == 1:
+            	    	    index_e = data_s.find("E")
+            	    	    if index_e >= 0:
+                    		find_head = 0
+                        	if sev.isSet():
+                        	    sev.clear()
+                        	    datq.put(data_s[:index_e])
+                        	    gev.set()
+                    		data_s = data_s[index_e:]
                 else:
                     inputs.remove(s)
                     s.close()
@@ -199,20 +201,17 @@ def black_list_add(v, scan_pos):
     global blacks_index
     black_list[blacks_index] = [v, c_step, scan_pos]
     blacks_index += 1
-    print("black_list_add ", v, scan_pos)
 
 # If a coordenates in black list is not found within the last 3 times, remove it to black list.  
 def black_list_update():
     global black_list
     for e in black_list.keys():
         if c_step - black_list[e][1] > 2:
-            print("black_list_update", black_list[e])
             del black_list[e]
 
 #Check whether a coordenates is in black list.
 def black_list_check(v, scan_pos):
     global black_list
-    print("black_check:", v)
     for e in black_list.keys():
         if black_list[e][2] == scan_pos:
             v0=[[black_list[e][0][0], v[0]], [black_list[e][0][1], v[1]]]
@@ -249,11 +248,10 @@ def get_a_co(scan_pos=None ,segment_index=2 ,timeout=1, isConfirm = None):
     if not gev.isSet():
         return None
     try:
-        data=datq.get().split('*')
-        data = data[segment_index].split('/')[color].split('.')[1:]
+        data1=datq.get().split('*')
+        data = data1[segment_index].split('/')[color].split('.')[1:]
     except:
         return None
-    
     print("get data:", data)
     ret = []
     for dat in data:
@@ -287,11 +285,20 @@ def get_a_co(scan_pos=None ,segment_index=2 ,timeout=1, isConfirm = None):
     
 def get_coordenate(scan_pos=None, isConfirm = None):
     time.sleep(1) 
-    cos = [get_a_co(scan_pos, isConfirm=isConfirm) for i in range(10)]
+    cos = [get_a_co(scan_pos, isConfirm=isConfirm) for i in range(3)]
     cos = filter(lambda c: c is not None, cos)
+    print("cos0", cos)
+    if not len(cos) :
+        return []
+    
     if len(cos) < 3:
+        cos += [get_a_co(scan_pos, isConfirm=isConfirm) for i in range(5)]
+        cos = filter(lambda c: c is not None, cos)
+        print("cos1", cos)
+    if len(cos) < 2:
         return []
 
+    print("cos2", cos)
     th = int(len(cos) * 2 / 3)
     for c in cos:
         li = [math.pow(c[0] - i[0],2) + math.pow(c[1] - i[1],2) for i in cos]
@@ -300,12 +307,12 @@ def get_coordenate(scan_pos=None, isConfirm = None):
             cos.remove(c)
     if not len(cos):
         return []
-    print("cos", cos)
     co = [0, 0]
     for c in cos:
         co[0] += c[0]
         co[1] += c[1]
     
+    print("cos3", cos)
     return [co[0]/ len(cos), co[1] / len(cos)]
 
 
@@ -318,9 +325,11 @@ def get_cos(segment_index=1, timeout=1):
     cos = []
     if not gev.isSet():
         return []
-    data=datq.get().split('*')
-    print("get data", data)
-    data = data[segment_index].split('/')[color].split('.')[1:]
+    try:
+        data=datq.get().split('*')
+        data = data[segment_index].split('/')[color].split('.')[1:]
+    except:
+        return []
     for dat in data:
         dat = dat.split(':')
         try:
@@ -436,6 +445,7 @@ def action_start():
     unhome_joints(joints)
     while h['s_switch']:
         pass
+    
     while not h['s_switch']:
         pass
     for i in range(0,8):
@@ -444,44 +454,11 @@ def action_start():
     task_mode_set(linuxcnc.MODE_MDI)
     move_to([250, 0, 140])
     while h['s_switch']:
+        v = get_coordenate()
+        if len(v):
+            print("mcoo: ", get_machine_coordenate(v))
         pass
     uarm_state = Uarm_states.DETECT
-
-
-R_MIN = 140
-R_MAX = 330
-R_MAX_2 = R_MAX * R_MAX
-R_MIM_2 = R_MIN * R_MIN 
-
-S_ANGLE_1 = 60 * math.pi / 180 
-S_ANGLE_2 = 40 * math.pi / 180 
-k = (math.cos(S_ANGLE_1) * R_MAX - math.cos(S_ANGLE_2) * R_MIN) / (math.sin(S_ANGLE_1) * R_MAX - math.sin(S_ANGLE_2) * R_MIN)
-b = math.cos(S_ANGLE_1) * R_MAX - k * math.sin(S_ANGLE_1) * R_MAX 
-
-def position_check_1(ver):
-    r0 = math.atan2(ver[1] , ver[0])
-    d2 = math.pow(ver[0], 2) + math.pow(ver[1], 2)
-    if math.fabs(r0) > S_ANGLE_2:
-        print("math.fabs(r0) > S_ANGLE_2:", math.fabs(r0) * 180 / math.pi) 
-        return False
-    elif math.fabs(r0) < S_ANGLE_1:
-        if d2 > R_MAX_2 or d2 < R_MIM_2:
-            print("d2 > R_MAX_2 or d2 < R_MIM_2:", d2) 
-            return False
-    else:
-        if d2 < R_MIM_2:
-            print("d2 < R_MIM_2", math.sqrt(d2)) 
-            return False
-        else:
-            if r0 > 0:
-                if ver[0] < ver[1] * k + b:
-                    print("ver[0] < ver[1] * k + b", ver[0], ver[1] * k + b, k, b) 
-                    return False
-            else:
-                if ver[0] < ver[1] * (-k) + b:
-                    print("ver[0] < ver[1] * -k + b", ver[0], ver[1] * (-k) + b, k , b) 
-                    return False
-    return True
 
 def position_check(ver):
     if math.fabs(ver[1]) > 180:
@@ -496,9 +473,11 @@ def position_check(ver):
         return False
     return True
 
-def move_to(v, speed=5000):
+def move_to(v, speed=5000, isBlock=True):
     c.mdi("g1 x" + "%f" % (v[0]) + " y" + "%f" % (v[1]) + " z"+ "%f" % (v[2]) + " f" + str(speed))
-    print("g1 x" + str(v[0]) + " y" + str(v[1]) + " z"+ str(v[2]) + " f" + str(speed))
+    #print("g1 x" + str(v[0]) + " y" + str(v[1]) + " z"+ str(v[2]) + " f" + str(speed))
+    if not isBlock:
+        return True
     c.wait_complete()
     return True
 
@@ -575,12 +554,10 @@ def action_detect():
     for i in range(len(de_pos) - 1):
         detection_move()
         co_list = get_coordenates(); 
-        print("co_list", co_list)
         if (len(co_list)):
             p = position_get();
             machine_list += get_machine_coordenates(co_list, p)
     if len(machine_list):        
-        print("machine_list", machine_list)
         scan_list_t = [map_to_grid(n) for n in machine_list]
         scan_list_t.sort()
         c=None
@@ -588,7 +565,6 @@ def action_detect():
             if not c == l:
                 c = l
                 scan_list.append(c)
-        print("scan_list", scan_list)
         detection_pos_return_to = p
         uarm_state=Uarm_states.SCAN
     else:
@@ -611,10 +587,8 @@ def action_scan():
         return
 
     scan_pos = scan_list[0]
-    print("scan_pos", scan_pos)
     move_to(scan_grid[scan_pos]) 
     cor = get_coordenate(scan_pos)
-    print("cor", cor) 
     if not len(cor):
         scan_list.remove(scan_pos)
         uarm_state=Uarm_states.SCAN
@@ -631,9 +605,7 @@ def action_scan():
             uarm_state=Uarm_states.SCAN
         else:
             down_pos = [[x,y,scan_grid[scan_pos][2]], cor, scan_pos]
-            print("down_pos ", down_pos)
             uarm_state=Uarm_states.DOWN
-    print("x, y", x, y)
 
 def action_confirm():
     global uarm_state
@@ -662,27 +634,23 @@ def action_confirm():
             uarm_state=Uarm_states.DOWN
 
 pump_top=35
-
-try_num = 0
 def action_down():
     global uarm_state
-    global try_num
-    move_to([down_pos[0][0], down_pos[0][1], pump_top])
-    p_top = pump_top
-    for i in range(10):
-        if not h["s_pump"]:
-            p_top = p_top-1
-            move_to([down_pos[0][0], down_pos[0][1],p_top],speed=1000)
-        else:
-            uarm_state=Uarm_states.PUMP
-            return
-    if try_num == 1: 
+
+    move_to([down_pos[0][0], down_pos[0][1], pump_top], speed=20000)
+    move_to([down_pos[0][0], down_pos[0][1], pump_top - 5],speed = 50, isBlock=False)
+    while not h["s_pump"]:
+        s.poll()
+        if s.state == linuxcnc.RCS_DONE:
+            break
+    
+    if h["s_pump"]:
+        c.abort()
+        c.wait_complete()
+        uarm_state=Uarm_states.PUMP
+    else: 
         black_list_add(down_pos[1], down_pos[2])
         uarm_state=Uarm_states.SCAN
-        try_num = 0;
-    else:
-        uarm_state=Uarm_states.DOWN
-        try_num = 1
 
 def action_pump():
     global uarm_state
@@ -691,23 +659,31 @@ def action_pump():
     uarm_state=Uarm_states.REMOVE
 
 
-dump_pos=[[250, -200, pump_top],[200, -200, pump_top],[150, -200, pump_top] ]
+dump_pos=[[250, -210, pump_top],[200, -210, pump_top],[150, -210, pump_top] ]
 dump_pos_index=0
-dump_top = 140
+dump_top = 100
 def action_remove():
     global uarm_state
     global dump_pos_index
     
     v=[down_pos[0][0],down_pos[0][1],dump_top]
-    move_to(v)
-    v=[dump_pos[dump_pos_index][0],dump_pos[dump_pos_index][1],dump_top]
-    move_to(v)
-    move_to(dump_pos[dump_pos_index])
+    move_to(v, speed=16000)
+    v=[dump_pos[dump_pos_index][0],dump_pos[dump_pos_index][1],160]
+    move_to(v, speed=16000)
+    move_to(dump_pos[dump_pos_index],speed = 2000 ,isBlock=False)
+    while not h["s_pump"]:
+        s.poll()
+        if s.state == linuxcnc.RCS_DONE:
+            break
+    if h["s_pump"]:
+        c.abort()
+        c.wait_complete()
+
     h['pump']=1
-    time.sleep(1.5)
     dump_pos_index += 1
     if dump_pos_index >= len(dump_pos):
         dump_pos_index=0
+    time.sleep(3)
     move_to(v)
     uarm_state = Uarm_states.SCAN
 

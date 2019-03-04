@@ -1,0 +1,7 @@
+net pump <= IO.pump
+net pump => lcec.0.3.dout-2
+net check <= lcec.0.2.din-2
+net check => IO.s_pump
+net s_switch <= lcec.0.2.din-0
+net s_switch => IO.s_switch
+

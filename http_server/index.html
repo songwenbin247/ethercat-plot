@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html style="height:100%; width:100%;">
+   <head>
+       <meta charset="utf-8">
+	   <title>The performance of IGH</title>
+	   <style type = ></style>
+   </head>
+
+   <body style="height: 100%; margin: 0">
+	<!--<input name="IP" type="text" id="IP" placeholder="Server IP" style="margin-left:10px; height: 22px; background-color:#CCC;"/>-->
+	<!--<input type="submit" value="Start"  onclick="getServerIp()" style="margin-left:0px; background-color: #7ED321; width:70px;height: 30px;color: #FFFFFF"/>-->
+	<input type="text" value="TSN" style="margin-left:10px; border:0px; width:50px; text-align:center;">
+	<input type="submit" id="TB" value="DisableTSN"  onclick="tsnButton()" style="margin-left:0px; background-color: #BFEFFF; width:100px;height: 30px;color: #CD3333"/>
+	<input type="text" value="Background Stream" style="margin-left:300px; border:0px; width:150px; text-align:center;">
+	<input type="submit" id="BD" value="Start"  onclick="BackgroundDiagram()" style="margin-left:3px; background-color: #BFEFFF; width:100px;height: 30px;color: #050505"/>
+
+       <div id="container" style="height: 100%"></div>
+       <script type="text/javascript" src="/js/echarts.min.js"></script>
+       <script type="text/javascript" src="/js/echarts-gl.min.js"></script>
+       <script type="text/javascript" src="/js/ecStat.min.js"></script>
+       <script type="text/javascript" src="/js/dataTool.min.js"></script>
+       <script type="text/javascript" src="/js/china.js"></script>
+       <script type="text/javascript" src="/js/world.js"></script>
+       <!--script type="text/javascript" src="http://api.map.baidu.com/api?v=2.0&ak=ZUONbpqGBsYGXNIYHicvbAbM"></script-->
+       <script type="text/javascript" src="/js/bmap.min.js"></script>
+       <script type="text/javascript" src="/js/simplex.js"></script>
+           <script src="/js/jquery-3.3.1.min.js"></script>
+
+
+       <script type="text/javascript">
+		var dom = document.getElementById("container");
+		var myChart = echarts.init(dom);
+		var app = {};
+		option = null;
+
+		var times = [];
+		var enable_tsn = [];
+		var disable_tsn = [];
+		var loop_openil = [];
+		var loop_generic = [];
+		var performanceAverage = 5;
+		var Y_N = 20;
+		var X_MAX = 10;
+		var X_MIN = 0;
+		var BTN_ENABLE_TSN = 'Enable';
+		var BTN_DISABLE_TSN = 'Disable';
+		var LEGEND_ENABLE_TSN = 'TSN   Enabled';
+		var LEGEND_DISABLE_TSN = 'TSN   Disabled';
+		var tmpTSNButtonNmae = LEGEND_ENABLE_TSN;
+		var OPEN_BD = 'Start';
+		var CLOSE_BD = 'Stop';
+		var tmpDbButtonNmae = OPEN_BD;
+
+		var transmission = 0;
+		var cycle = 0;
+		var count = 0;
+		var Url = 'http://10.193.21.52:8000/';
+		var flag = 0;
+
+		for(let i = 0; i < Y_N; i++){
+			times.push("");
+		}
+
+		option = {
+			title: [
+				{
+					left: '10%',
+					top: '1%',
+					text: 'EtherCAT Line Delay'
+				},
+				{
+					top: '48%',
+					left: '10%',
+					text: 'Control Loop Time'
+				}
+			],
+			tooltip: {
+				trigger: 'axis'
+			},
+			legend: [
+                {
+                    icon : 'bar',
+                    textStyle : {
+                        color : "#262626"
+                    },
+                    data : [tmpTSNButtonNmae],
+					x : '40%',
+                },
+				{
+                    icon : 'bar',
+                    textStyle : {
+                        color : "#262626"
+                    },
+                    data : ['Historical data with TSN disabled'],
+					x : '65%',
+					y : '40%',
+                },
+
+				{
+                    icon : 'bar',
+                    textStyle : {
+                        color : "#262626"
+                    },
+                    data : ['Running in OpenIL', 'Running in Generic Linux'],
+                    x : '40%',
+					top: '50%'
+                }
+            ],
+			xAxis: [
+				{
+					data: times
+				},
+				{
+					data: times,
+					gridIndex: 1
+				}
+			],
+			yAxis: [
+				{
+					splitLine: {show: false},
+					axisLabel: {
+						formatter: '{value} μs'
+					}
+				},
+				{
+					splitLine: {show: false},
+					axisLabel: {
+						formatter: '{value} μs'
+					},
+					//max:250,
+					//min:150,
+					gridIndex: 1
+				}
+			],
+			grid: [
+				{x: '20%', y: '7%', width: '60%', height: '38%'},
+				{x: '20%', y2: '7%', width: '60%', height: '38%'}
+			],
+			series: [
+				{
+					name: tmpTSNButtonNmae,
+					type: 'line',
+					showSymbol: false,
+					data: enable_tsn,
+					itemStyle : {
+						normal : {
+							color:'#3ca4e0',
+							lineStyle:{
+								color:'#3ca4e0'
+							}
+						}
+					},
+				},
+				{
+					name: 'Historical data with TSN disabled',
+					type: 'line',
+					showSymbol: false,
+					data: disable_tsn,
+					itemStyle : {
+						normal : {
+							color:'#d4d4d4',
+							lineStyle:{
+								color:'#d4d4d4'
+							}
+						}
+					},
+				},
+				{
+					name: 'Running in OpenIL',
+					type: 'line',
+					showSymbol: false,
+					data: loop_openil,
+					itemStyle : {
+						normal : {
+							color:'#00FF00',
+							lineStyle:{
+								color:'#00FF00'
+							}
+						}
+					},
+					xAxisIndex: 1,
+					yAxisIndex: 1
+				},
+				{
+					name: 'Running in Generic Linux',
+					type: 'line',
+					showSymbol: false,
+					data: loop_generic,
+					itemStyle : {
+						normal : {
+							color:'#d4d4d4',
+							lineStyle:{
+								color:'#d4d4d4'
+							}
+						}
+					},
+					xAxisIndex: 1,
+					yAxisIndex: 1
+				}
+
+			]
+		};
+
+		myChart.setOption(option);
+
+		setInterval(function(){
+			if (flag === 0){
+				//return;
+			}
+			$.ajax({
+				url: Url,
+				dataType: 'text',
+				success: function(data) {
+					data = data.replace(/[\r\n]/g, "");
+					var strs = data.split('\t');
+					var strsLen = strs.length;
+					if (parseFloat(strs[0], 10) < 0) {
+						enable_tsn.push(60);
+	       				} else {
+						if ((parseFloat(strs[0], 10) / 1000) > 100) {
+							enable_tsn.push(60);
+						} else {
+							enable_tsn.push(parseFloat(strs[0], 10) / 1000);
+						} 
+ 
+	       				}
+					loop_openil.push(parseFloat(strs[2], 10) / 1000);
+					disable_tsn.push(parseFloat(strs[4], 10) / 1000);
+					loop_generic.push(parseFloat(strs[6], 10));
+					console.log(strs);
+				}
+			});
+
+			if(count >= Y_N){
+				enable_tsn.shift();
+				disable_tsn.shift();
+				loop_openil.shift();
+				loop_generic.shift();
+			}
+			count++;
+
+			myChart.setOption({
+			series: [
+				{
+					data: enable_tsn,
+				},
+				{
+					data: disable_tsn,
+				},
+				{
+					data: loop_openil,
+				},
+				{
+					data: loop_generic,
+				},
+
+			]
+
+			});
+
+		}, 500)
+
+		;
+		if (option && typeof option === "object") {
+			myChart.setOption(option, true);
+		}
+		function getServerIp(){
+			Url = document.getElementById("IP").value;
+			flag = 1;
+		}
+		function tsnButton(){
+			var tmpOpt;
+			var btnVal = document.getElementById("TB");
+			if (btnVal.value === BTN_ENABLE_TSN) {
+				btnVal.value = BTN_DISABLE_TSN;
+				tmpTSNButtonNmae = LEGEND_ENABLE_TSN;
+				tmpOpt = 'opt_EnableTSN';
+				btnVal.style.color = "#CD3333";
+			} else {
+				btnVal.value = BTN_ENABLE_TSN;
+				tmpTSNButtonNmae = LEGEND_DISABLE_TSN;
+				tmpOpt = 'opt_DisableTSN';
+				btnVal.style.color = "#050505";
+			}
+			buttonPost(tmpOpt);
+			myChart.setOption({
+				legend: [
+					{
+						data : [tmpTSNButtonNmae],
+					},
+				],
+				series: [
+					{
+						name: tmpTSNButtonNmae,
+					},
+				]
+			});
+
+
+		}
+		function BackgroundDiagram(){
+			var btnVal=document.getElementById("BD");
+			if (btnVal.value === OPEN_BD) {
+				btnVal.value = CLOSE_BD;
+				btnVal.style.color = "#CD3333";
+				tmpDbButtonNmae = 'opt_OpenDB';
+			} else {
+				btnVal.value = OPEN_BD;
+				btnVal.style.color = "#050505";
+				tmpDbButtonNmae = 'opt_CloseDB';
+			}
+			buttonPost(tmpDbButtonNmae);
+		}
+		function buttonPost(option){
+			$.ajax({
+				type: 'POST',
+				url: Url,
+				dataType: 'text',
+				data: option,
+				success: function(data) {
+					console.log(option);
+				}
+			});
+		}
+
+		</script>
+
+   </body>
+</html>
+

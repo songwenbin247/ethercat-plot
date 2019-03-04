@@ -7,7 +7,7 @@
 <body>
 
     <form>
-        WebSock: <input type="text" id="endpoint" name="endpoint" value="ws://10.193.20.92:5007"  style="width: 200px" >
+        WebSock: <input type="text" id="endpoint" name="endpoint" value="ws://10.193.20.155:5007"  style="width: 200px" >
         <input type="button" id="b_endpoint" onclick="connectToWS()" value="connect" >
     	login: <input type="button" id="login" onclick="connectToMachine()" value="login" disabled = true/>
     	Estop: <input type="button" id="estop" onclick="setEstop()" value="on" disabled = true/>
@@ -31,6 +31,9 @@
             
                         <input type="radio" id="zz" name="home" value="2">
                         <label for="zz" id="labelhz" style="color: red" >Z</label>
+                        
+			<input type="radio" id="cc" name="home" value="3">
+                        <label for="cc" id="labelhc" style="color: red" >C</label>
                     </div><br>
                     <div>
                     <input type="button", id="homeTo" value="Home" onclick="setHome()" disabled=true>
@@ -48,30 +51,33 @@
             
                     <input type="radio" id="jz" name="jog" value="2">
                     <label for="jz" id="labelhz" style="color: red" >Z</label>
+                    
+		    <input type="radio" id="jc" name="jog" value="3">
+                    <label for="jc" id="labelhc" style="color: red" >C</label>
             </div>
             <div>
                 <label for="speed">Speed:</label>
-                <input type="range" id="speed" name="Speed" 
-                       min="0" max="10000" value="2000" list="SpeedSelec" onchange="updateSpeed()"/>
-                <span id="speedValue">2000</span>
+                <input type="range" id="angle" name="angle increment" 
+                       min="-180" max="180" value="10" list="SpeedSelec" onchange="updateSpeed()"/>
+                <span id="angle_incr_span">2000</span>
 
-                <datalist id="SpeedSelec">
+                <datalist id="angle_incr">
                   <option value="0" label="0%">
-                  <option value="100">
-                  <option value="200">
-                  <option value="300">
-                  <option value="400">
-                  <option value="500">
-                  <option value="1000" label="10%">
-                  <option value="2000">
-                  <option value="3000">
-                  <option value="4000">
-                  <option value="5000">
-                  <option value="6000">
-                  <option value="7000">
-                  <option value="8000">
-                  <option value="9000">
-                  <option value="10000" label="100%">
+                  <option value="1">
+                  <option value="2">
+                  <option value="3">
+                  <option value="4">
+                  <option value="5">
+                  <option value="10" label="50%">
+                  <option value="20">
+                  <option value="30">
+                  <option value="40">
+                  <option value="50">
+                  <option value="60">
+                  <option value="70">
+                  <option value="80">
+                  <option value="90">
+                  <option value="120" label="100%">
                 </datalist>
             </div>
     	    <div> <br>
@@ -95,8 +101,8 @@
                  <input type="text" id="adjustValueX"  value="0" onkeypress="return searchKeyPressSetAdjust(event);" >
                  <input type="text" id="adjustValueY"  value="0" onkeypress="return searchKeyPressSetAdjust(event);" >
 
-                 <label id='lzup' >Z:</label>
-                 <input type="button" id="setZ" onclick="setZstatus()" value="Down" />
+                 <label id='Tong' >Tong</label>
+                 <input type="button" id="setTT" onclick="setTstatus()" value="Close" />
 
                  <label id='lsetCor'>Set Coordinate:</label>
                  <input type="button" id="setCor" onclick="setCoordinate('c')" value="curPosition" />
@@ -131,6 +137,7 @@
                 X: <input type="button" class = "showPos" id="posX" value="0" readonly=true>
                 Y: <input type="button" class = "showPos" id="posY" value="0" readonly=true>
                 Z: <input type="button" class = "showPos" id="posZ" value="0" readonly=true>
+                C: <input type="button" class = "showPos" id="posC" value="0" readonly=true>
     	    </div>
         </fieldset>
     </form>

@@ -1,0 +1,19 @@
+poweroff
+[root@OpenIL2:~]# Stopping NXP NETCONF tool: netconf.
+Stopping DHCP server: OK
+Stopping openil-init: OK
+Stopping sshd: OK
+Removing VLAN-tagged interface: OK
+Removing iptables rules: OK
+Stopping SJA1105 TSN switch: OK
+Stopping network: ifdown: interface eth0 not configured
+OK
+Stopping system message bus: done
+Saving random seed... done.
+Stopping logging: OK
+umount: devtmpfs busy - remounted read-only
+[19812.305718] EXT4-fs (mmcblk0p2): re-mounted. Opts: (null)
+The system is going down NOW!
+Sent SIGTERM to all processes
+Sent SIGKILL t[19814.328397] kvm: exiting hardware virtualization
+[19814.358290] reboot: System halted

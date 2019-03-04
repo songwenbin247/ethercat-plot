@@ -86,10 +86,8 @@ var myWebSocket;
             setTimeout(updatePosition, 3000);
             setTimeout(updatePosition, 4000);
         }
-	if (message.charAt(0) == "#")
-        	myWebSocket.send( message.slice(1));
-	   else
-        	myWebSocket.send( "set mdi " + message);
+        myWebSocket.send( "set mdi " + message);
+        //myWebSocket.send( message);
     }
     
     function sendCmd(str) {

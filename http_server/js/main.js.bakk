@@ -86,10 +86,8 @@ var myWebSocket;
             setTimeout(updatePosition, 3000);
             setTimeout(updatePosition, 4000);
         }
-	if (message.charAt(0) == "#")
-        	myWebSocket.send( message.slice(1));
-	   else
-        	myWebSocket.send( "set mdi " + message);
+        myWebSocket.send( "set mdi " + message);
+        //myWebSocket.send( message);
     }
     
     function sendCmd(str) {
@@ -258,7 +256,15 @@ var myWebSocket;
 	}
 	queryTimes -= 1;
    }
-   
+  
+function sleep(milliseconds) {
+	    var start = new Date().getTime();
+	    for (var i = 0; i < 1e7; i++) {
+		        if ((new Date().getTime() - start) > milliseconds){
+				      break;
+				    }
+		      }
+  }
 
    var queryHomingTimerId;
    var queryHomingAxis;
@@ -277,11 +283,17 @@ var myWebSocket;
   	}
     var ax = Number(va);
         sendCmd("set home 0" );
+	   sleep(200);
         sendCmd("set home 1" );
+	   sleep(200);
         sendCmd("set home 2" );
+	   sleep(200);
         sendCmd("set home 3" );
+	   sleep(200);
         sendCmd("set home 4" );
+	   sleep(200);
         sendCmd("set home 5" );
+	   sleep(200);
     document.getElementById("homeTo").disabled = true;
     queryHomingAxis = ax;
     queryTimes = 6;

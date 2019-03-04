@@ -1,0 +1,49 @@
+kill 2738
+root@ls1043ardb:~# kill 2738
+root@ls1043ardb:~# [ ID] Interval Transfer Bandwidth
+[ 3] 0.0-1328.9 sec 34.1 GBytes 221 Mbits/sec
+[ 3] Sent 91593606 datagrams
+read failed: Connection refused
+[ 3] WARNING: did not receive ack of last datagram after 2 tries.
+ill 2745
+root@ls1043ardb:~# kill 2745
+root@ls1043ardb:~# [ ID] Interval Transfer Bandwidth
+[ 3] 0.0-14.4 sec 380 MBytes 221 Mbits/sec
+[ 3] Sent 995351 datagrams
+read failed: Connection refused
+[ 3] WARNING: did not receive ack of last datagram after 4 tries.
+kill 2754
+root@ls1043ardb:~# kill 2754
+root@ls1043ardb:~# [ ID] Interval Transfer Bandwidth
+[ 3] 0.0-24.4 sec 643 MBytes 221 Mbits/sec
+[ 3] Sent 1684975 datagrams
+read failed: Connection refused
+[ 3] WARNING: did not receive ack of last datagram after 4 tries.
+kill 2761
+root@ls1043ardb:~# kill 2761
+root@ls1043ardb:~# [ ID] Interval Transfer Bandwidth
+[ 3] 0.0-3210.0 sec 82.4 GBytes 221 Mbits/sec
+[ 3] Sent 221243614 datagrams
+read failed: Connection refused
+[ 3] WARNING: did not receive ack of last datagram after 2 tries.
+kill 2770
+root@ls1043ardb:~# kill 2770
+root@ls1043ardb:~# [ ID] Interval Transfer Bandwidth
+[ 3] 0.0- 5.8 sec 153 MBytes 221 Mbits/sec
+[ 3] Sent 399957 datagrams
+read failed: Connection refused
+[ 3] WARNING: did not receive ack of last datagram after 2 tries.
+kill 2777
+root@ls1043ardb:~# kill 2777
+root@ls1043ardb:~# [ ID] Interval Transfer Bandwidth
+[ 3] 0.0-2186.0 sec 56.1 GBytes 221 Mbits/sec
+[ 3] Sent 150667491 datagrams
+read failed: Connection refused
+[ 3] WARNING: did not receive ack of last datagram after 5 tries.
+kill 2784
+root@ls1043ardb:~# kill 2784
+root@ls1043ardb:~# [ ID] Interval Transfer Bandwidth
+[ 3] 0.0-3672.7 sec 94.3 GBytes 221 Mbits/sec
+[ 3] Sent 253136683 datagrams
+read failed: Connection refused
+[ 3] WARNING: did not receive ack of last datagram after 2 tries.
