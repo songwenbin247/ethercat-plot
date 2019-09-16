@@ -42,7 +42,7 @@ running = 1
 color=0
 color_str=["Red", "Green", "Yellow", "Blue"]
 switch_test="0"
-
+wifi_lost_num=0
 
 class switch_status(object):
     def __init__(self, interval, callback, *args, **kwargs):
@@ -162,6 +162,7 @@ def speech_callback(r, audio):
 def receive_coordinate (datq, sev, gev,pipe_r):
     global running
     global color
+    global wifi_lost_num
     try:
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server.setblocking(0)
@@ -192,7 +193,6 @@ def receive_coordinate (datq, sev, gev,pipe_r):
                             inputs[2].close()
                         except:
                             pass
-                            print("Exit8..")
                         exit(0)
                         print("Exit7..")
             else:
@@ -210,6 +210,7 @@ def receive_coordinate (datq, sev, gev,pipe_r):
                         else:
                             color = color
                     else:
+                        wifi_lost_num = 0
                         data_s += data
                         #print(data_s)
     		        if find_head == 0:
@@ -562,21 +563,22 @@ def action_start():
     task_mode_set(linuxcnc.MODE_MANUAL)
     unhome_joints(joints)
 
-    while switch_test != "1":
+    while h['s_switch']:
         pass
-    switch_test = "2"
+    while not h['s_switch']:
+        pass
+
+    switch_test = "1"
     for i in range(0,8):
         c.home(i)
     cnc_util.wait_for_home(joints, timeout=20)
     task_mode_set(linuxcnc.MODE_MDI)
     move_to([250, 0, 140])
-#    while h['s_switch']:
-    while switch_test != "3":
+    while h['s_switch']:
         v = get_coordenate()
         if len(v):
             print("test: ", get_machine_coordenate(v))
         pass
-    switch_test = "4"
     uarm_state = Uarm_states.DETECT
 
 def position_check(ver):
@@ -668,6 +670,8 @@ def action_detect():
     global uarm_state
     global scan_list
     global detection_pos_return_to
+    global switch_test
+    switch_test = "2"
     machine_list = []
     for i in range(len(de_pos) - 1):
         detection_move()
@@ -729,6 +733,8 @@ def action_confirm():
     global uarm_state
     global confirm_pos
     global down_pos
+    global switch_test
+    switch_test = "3"
     move_to(confirm_pos[0])
     cor = get_coordenate(isConfirm=True)
 
@@ -754,6 +760,8 @@ def action_confirm():
 pump_top=35
 def action_down():
     global uarm_state
+    global switch_test
+    switch_test = "4"
 
     move_to([down_pos[0][0], down_pos[0][1], pump_top], speed=20000)
     move_to([down_pos[0][0], down_pos[0][1], pump_top - 15],speed = 100, isBlock=False)
@@ -773,6 +781,8 @@ def action_down():
 
 def action_pump():
     global uarm_state
+    global switch_test
+    switch_test = "5"
     h['pump'] = 0
     time.sleep(1)
     uarm_state=Uarm_states.REMOVE
@@ -784,6 +794,8 @@ dump_top = 100
 def action_remove():
     global uarm_state
     global dump_pos_index
+    global switch_test
+    switch_test = "6"
     
     v=[down_pos[0][0],down_pos[0][1],dump_top]
     move_to(v, speed=16000)
@@ -846,7 +858,7 @@ def command(parent, cmd):
         return 'None'
 
 server = Server()
-server.set_endpoint("opc.tcp://0.0.0.0:4843/uarm")
+server.set_endpoint("opc.tcp://%s:4843/uarm" % Host)
 server.set_server_name("UARM service")
 uri = "system service"
 idx = server.register_namespace(uri)
@@ -903,11 +915,12 @@ class RepeatedTimer(object):
     def stop(self):
         self._timer.cancel()
         self.is_running = False
-        print("exit6..")
-def get_estop_status():
-    if (s.task_state == linuxcnc.STATE_ESTOP):
+def get_wifi_status():
+    global wifi_lost_num
+    if (wifi_lost_num > 2):
         return "1"
     else:
+        wifi_lost_num += 1
         return "0"
 
 class UARM_states:
@@ -922,7 +935,7 @@ class UARM_states:
         self.joint_2 = "0"
         self.color = color_str[color]
         self.switch = switch_test
-        self.estop = get_estop_status()
+        self.wifi = get_wifi_status()
 	self.pump = h["pump"]
         self.str_var = '{ "position_0" :  "%s",\
                            "position_1" :   "%s", \
@@ -932,28 +945,28 @@ class UARM_states:
                            "joint_2" : "%s",\
                            "color": "%s",\
                            "switch": "%s",\
-                           "estop": "%s",\
+                           "wifi": "%s",\
                            "pump": "%s"}'
-        var = (self.position_0, self.position_1, self.position_2, self.joint_0, self.joint_1, self.joint_2, self.color, self.switch, self.estop, self.pump)
+        var = (self.position_0, self.position_1, self.position_2, self.joint_0, self.joint_1, self.joint_2, self.color, self.switch, self.wifi, self.pump)
         self.variable = obj.add_variable(idx, 'UARM_status', ua.Variant(self.str_var % var, ua.VariantType.String))
     def get_variable(self):
-        var = (self.position_0, self.position_1, self.position_2, self.joint_0, self.joint_1, self.joint_2, self.color, self.switch, self.estop, self.pump)
+        var = (self.position_0, self.position_1, self.position_2, self.joint_0, self.joint_1, self.joint_2, self.color, self.switch, self.wifi, self.pump)
         return ua.Variant(self.str_var % var,ua.VariantType.String)
     def update(self):
-#	p = position_get()
-#        self.position_0 = p[0][0]
-#        self.position_1 = p[0][1]
-#        self.position_2 = p[0][2]
-#        self.joint_0 = p[1][0]
-#        self.joint_1 = p[1][1]
-#        self.joint_2 = p[1][2]
-#        self.color = color_str[color]
-#        self.estop = get_estop_status()
+	p = position_get()
+        self.position_0 = p[0][0]
+        self.position_1 = p[0][1]
+        self.position_2 = p[0][2]
+        self.joint_0 = p[1][0]
+        self.joint_1 = p[1][1]
+        self.joint_2 = p[1][2]
+        self.color = color_str[color]
+        self.wifi = get_wifi_status()
         self.switch = switch_test
         self.pump = h["pump"]
         self.variable.set_value(self.get_variable())
     def start(self):
-        self.timer = RepeatedTimer(0.5,self.update)
+        self.timer = RepeatedTimer(1,self.update)
         self.timer.start()
 
     def stop(self):
@@ -978,15 +991,10 @@ def signal_exit_handler(signum, frame):
     global pipe_w
     global get_co_thread
     global running
-    print("exit..")
     os.write(pipe_w, 'q')
-    print("exit1..")
     get_co_thread.join()
-    print("exit2..")
     running = 0
-    print("exit3..")
     UARM_s.stop()
-    print("exit4..")
 
 signal.signal(signal.SIGINT, signal_exit_handler)
 server.start()
