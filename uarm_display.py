@@ -12,10 +12,24 @@ import linuxcnc_util
 import hal
 from enum import Enum
 import math
+import fcntl
+import struct
+from threading import Timer
+from opcua import ua, uamethod, Server
 
-Host='10.5.5.1'
+def get_ip_address(ifname):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    return socket.inet_ntoa(fcntl.ioctl(
+        s.fileno(),
+        0x8915,  # SIOCGIFADDR
+        struct.pack('256s', ifname[:15])
+    )[20:24])
+
+
+Host=get_ip_address("br0")
 Port=12346
 running = 1
+
 
 
 # The color which well be catched
@@ -23,8 +37,123 @@ running = 1
 # 1 : Green
 # 2 : Yellow
 # 3 : Blue
+
+
 color=0
 color_str=["Red", "Green", "Yellow", "Blue"]
+switch_test="0"
+
+
+class switch_status(object):
+    def __init__(self, interval, callback, *args, **kwargs):
+	self._timer     = None
+	self.interval   = interval
+	self.args       = args
+	self.kwargs     = kwargs
+	self.callback   = callback
+	self.is_running = False
+	self._delays = 0
+        self.start()
+
+    def _run(self):
+	if self._delays > 0:
+	        self.is_running = False				
+	        self.start()
+		self._delays -= 1
+	else:
+		self.callback(*self.args, **self.kwargs)
+	        self.is_running = False				
+	
+    def start(self):
+        if not self.is_running:
+            self.is_running = True
+            self._timer = Timer(self.interval, self._run)
+            self._timer.start()
+
+    def stop(self):
+        if self.is_running:
+	    self._timer.cancel()
+            self.is_running = False
+
+    def delay(self,n = 1):
+        self._delays = n
+    
+    def delay_clear(self,):
+    	self._delays = 0
+
+#sr.Microphone.list_microphone_names()
+
+#r = sr.Recognizer()
+#m = sr.Microphone()
+#color_code = {u'\u7ea2' : 0, u'\u7eff' : 1, u'\u9ec4' : 2, u'\u84dd' : 3}
+
+color_code = {u'red' : 0, u'green' : 1, u'yellow' : 2, u'blue' : 3}
+def judge_which_color(s):
+    for c in color_code.keys():
+  #      for i in s:
+  #          print i
+  #          if c == i:
+        if c in s:
+                return color_code[c]
+    return None
+
+
+
+def exit_wakeup():
+    global recog_status
+    recog_status = 0
+    print("Wait to wake up")
+
+
+recog_status = 0 # no wake up
+recog_status_handle = None
+def speech_callback(r, audio):
+    global color
+    global recog_status
+    global recog_status_handle
+    print("got it!  Now to recognize it...")
+    if recog_status == 0:
+        try:
+            str = r.recognize_sphinx(audio,keyword_entries=[("select", 0.8)],show_all=False)
+            print("you said : ", str)
+            if str[:6] == "select":
+                recog_status = 1
+                recog_status_handle = switch_status(40, exit_wakeup)
+        except sr.UnknownValueError:
+            print("Sphinx could not understand audio")
+        except sr.RequestError as e:
+            print("Sphinx error; {0}".format(e))
+    else:
+        try:
+            #s = r.recognize_google(audio, language="zh")
+            s = r.recognize_google(audio, language="en")
+            print("Google Speech Recognition thinks you said:", s)
+            col = judge_which_color(s)
+            if col is None:
+                print("Can not judge the color, so remain the %s" % color_str[color])
+            else:
+                color = col
+                recog_status_handle.delay(2)
+                print("Switch to color %s "% color_str[color])
+        except sr.UnknownValueError:
+            print("Google Speech Recognition could not understand audio")
+        except sr.RequestError as e:
+            print("Could not request results from Google Speech Recognition service; {0}".format(e))
+    if recog_status == 0:
+        print("Wait to wake up... ")
+    else:
+        print("Waiting for speech instruction ... ")
+
+#with m as source:
+#    r.adjust_for_ambient_noise(source)
+
+#r.dynamic_energy_threshold = False
+#r.dynamic_energy_adjustment_damping = 0.1
+#r.dynamic_energy_adjustment_ratio = 2
+#r.energy_threshold = 800
+
+#print("Wait to wake up... ")
+#stop_listening = r.listen_in_background(m, speech_callback)
 
 #Receive the blocks coordinates sending from OpenMV.
 #Receive the set of the color we want to catch.
@@ -56,16 +185,20 @@ def receive_coordinate (datq, sev, gev,pipe_r):
                 line = os.read(pipe_r, 64)
                 if line:
                     if (line == 'q'):
-                        inputs[0].shutdown(socket.SHUT_RDWR)
-                        inputs[2].shutdown(socket.SHUT_RDWR)
-                        inputs[2].close()
-                        inputs[0].close()
+                        try:
+                            inputs[0].shutdown(socket.SHUT_RDWR)
+                            inputs[0].close()
+                            inputs[2].shutdown(socket.SHUT_RDWR)
+                            inputs[2].close()
+                        except:
+                            pass
+                            print("Exit8..")
                         exit(0)
+                        print("Exit7..")
             else:
                 data = s.recv(24)
                 if data:
                     if data[0] == 'C': #set the color to filte 
-                        print(data)
                         if data[2:8] == 'Yellow':
                             color = 2
                         elif data[2:7] == 'Green':
@@ -76,9 +209,9 @@ def receive_coordinate (datq, sev, gev,pipe_r):
                             color = 0
                         else:
                             color = color
-                        print("Switch the color to: %s" % color_str[color])
                     else:
                         data_s += data
+                        #print(data_s)
     		        if find_head == 0:
             	    	    index_h = data_s.find("S")
             	    	    if index_h >= 0:
@@ -164,7 +297,6 @@ def map_to_grid(v, D=30):
         for i in machine_grid:
             a = math.atan2(i[1], i[0])
             scan_grid.append([i[0] - D*math.cos(a), i[1] - D*math.sin(a), i[2]])
-        print("scan_grid:", scan_grid)
     if v[0] < 200:
         i = 0
     elif v[0] > 265:
@@ -216,7 +348,6 @@ def black_list_check(v, scan_pos):
         if black_list[e][2] == scan_pos:
             v0=[[black_list[e][0][0], v[0]], [black_list[e][0][1], v[1]]]
             if is_almost_equal(v0):
-                print("black_check_ok", v)
                 black_list[e][1] = c_step
                 return True
     return False
@@ -252,7 +383,6 @@ def get_a_co(scan_pos=None ,segment_index=2 ,timeout=1, isConfirm = None):
         data = data1[segment_index].split('/')[color].split('.')[1:]
     except:
         return None
-    print("get data:", data)
     ret = []
     for dat in data:
         dat = dat.split(':')
@@ -287,23 +417,19 @@ def get_coordenate(scan_pos=None, isConfirm = None):
     time.sleep(1) 
     cos = [get_a_co(scan_pos, isConfirm=isConfirm) for i in range(3)]
     cos = filter(lambda c: c is not None, cos)
-    print("cos0", cos)
     if not len(cos) :
         return []
     
     if len(cos) < 3:
         cos += [get_a_co(scan_pos, isConfirm=isConfirm) for i in range(5)]
         cos = filter(lambda c: c is not None, cos)
-        print("cos1", cos)
     if len(cos) < 2:
         return []
 
-    print("cos2", cos)
     th = int(len(cos) * 2 / 3)
     for c in cos:
         li = [math.pow(c[0] - i[0],2) + math.pow(c[1] - i[1],2) for i in cos]
         if len(filter(lambda i: i < 25, li)) < th:
-            print("remove from cos", c)
             cos.remove(c)
     if not len(cos):
         return []
@@ -312,7 +438,6 @@ def get_coordenate(scan_pos=None, isConfirm = None):
         co[0] += c[0]
         co[1] += c[1]
     
-    print("cos3", cos)
     return [co[0]/ len(cos), co[1] / len(cos)]
 
 
@@ -345,7 +470,7 @@ def get_cos(segment_index=1, timeout=1):
     return cos
 	
 
-def get_coordenates(segment_index=1, timeout=3):
+def get_coordenates(segment_index=1, timeout=2):
     v = []
     time.sleep(1) 
     for i in range(3):
@@ -353,13 +478,6 @@ def get_coordenates(segment_index=1, timeout=3):
     return v
 
 
-def signal_exit_handler(signum, frame):
-    global pipe_w
-    global get_co_thread
-    global running
-    os.write(pipe_w, 'q')
-    get_co_thread.join()
-    running = 0
 
 
 sev=th.Event()
@@ -369,7 +487,6 @@ pipe_r,pipe_w = os.pipe()
 get_co_thread = th.Thread(target=receive_coordinate,name="receive_coordinate",args=(datq, sev, gev, pipe_r))
 get_co_thread.setDaemon(True)
 get_co_thread.start()
-signal.signal(signal.SIGINT, signal_exit_handler)
 
 
 
@@ -439,25 +556,27 @@ joints=[1,1,1,0,0,0,0,0,0]
 
 def action_start():
     global uarm_state
+    global switch_test
     estop_set(1)  # estop off
     machine_set(1)
     task_mode_set(linuxcnc.MODE_MANUAL)
     unhome_joints(joints)
-    while h['s_switch']:
+
+    while switch_test != "1":
         pass
-    
-    while not h['s_switch']:
-        pass
+    switch_test = "2"
     for i in range(0,8):
         c.home(i)
     cnc_util.wait_for_home(joints, timeout=20)
     task_mode_set(linuxcnc.MODE_MDI)
     move_to([250, 0, 140])
-    while h['s_switch']:
+#    while h['s_switch']:
+    while switch_test != "3":
         v = get_coordenate()
         if len(v):
-            print("mcoo: ", get_machine_coordenate(v))
+            print("test: ", get_machine_coordenate(v))
         pass
+    switch_test = "4"
     uarm_state = Uarm_states.DETECT
 
 def position_check(ver):
@@ -475,7 +594,6 @@ def position_check(ver):
 
 def move_to(v, speed=5000, isBlock=True):
     c.mdi("g1 x" + "%f" % (v[0]) + " y" + "%f" % (v[1]) + " z"+ "%f" % (v[2]) + " f" + str(speed))
-    #print("g1 x" + str(v[0]) + " y" + str(v[1]) + " z"+ str(v[2]) + " f" + str(speed))
     if not isBlock:
         return True
     c.wait_complete()
@@ -489,7 +607,7 @@ def is_almost_equal(v, tolerance=5):
     return True
 
 def position_get(isPoll=True):
-    estop_set(1)  # estop off
+#    estop_set(1)  # estop off
     if (isPoll):
         s.poll()
     return [s.position[0:3], s.joint_actual_position[0:3]]
@@ -638,7 +756,7 @@ def action_down():
     global uarm_state
 
     move_to([down_pos[0][0], down_pos[0][1], pump_top], speed=20000)
-    move_to([down_pos[0][0], down_pos[0][1], pump_top - 5],speed = 50, isBlock=False)
+    move_to([down_pos[0][0], down_pos[0][1], pump_top - 15],speed = 100, isBlock=False)
     while not h["s_pump"]:
         s.poll()
         if s.state == linuxcnc.RCS_DONE:
@@ -697,10 +815,185 @@ states_switch = {
         Uarm_states.REMOVE      : action_remove,
 }
 
+def UARM_cmd_set(args):
+    if (args[0] == 'switch'):
+        return UARM_s.set_switch(args[1])
+    elif (args[0] == 'color'):
+        return UARM_s.set_color(args[1])
+    else:
+        return "none"
+
+def UARM_cmd_get(args):
+    if (args[0] == 'switch'):
+        return UARM_s.set_switch(args[1])
+    elif (args[0] == 'color'):
+        return UARM_s.set_color(args[1])
+    elif (args[0] == 'estop'):
+        return UARM_s.set_estop(args[1])
+    else:
+        return "none"
+
+@uamethod
+def command(parent, cmd):
+    cmds = cmd.split(' ')
+    if (cmds[0] == 'set'):
+        ret = UARM_cmd_set(cmds[1:])
+        return ret
+    elif (cmds[0] == 'get'):
+        return UARM_cmd_get(cmds[1:])
+    else:
+        return 'None'
+
+server = Server()
+server.set_endpoint("opc.tcp://0.0.0.0:4843/uarm")
+server.set_server_name("UARM service")
+uri = "system service"
+idx = server.register_namespace(uri)
+
+######################################
+#
+# Create a new object for all linuxCNC.
+#
+#######################################
+objects = server.get_objects_node()
+UARM_obj = objects.add_object(idx, "UARM")
+
+######################################
+#
+# Add command method
+#
+#######################################
+inarg = ua.Argument()
+inarg.Name = "cmd"
+inarg.DataType = ua.NodeId(ua.ObjectIds.String)
+inarg.ValueRank = -1
+inarg.ArrayDimensions = []
+inarg.Description = ua.LocalizedText("command")
+
+outarg = ua.Argument()
+outarg.Name = "resp"
+outarg.DataType = ua.NodeId(ua.ObjectIds.String)
+outarg.ValueRank = -1
+outarg.ArrayDimensions = []
+outarg.Description = ua.LocalizedText("result")
+
+UARM_obj.add_method(idx, "command", command, [inarg], [outarg])
+
+class RepeatedTimer(object):
+    def __init__(self, interval, function, *args, **kwargs):
+        self._timer     = None
+        self.interval   = interval
+        self.function   = function
+        self.args       = args
+        self.kwargs     = kwargs
+        self.is_running = False
+
+    def _run(self):
+        self.is_running = False
+        self.start()
+        self.function(*self.args, **self.kwargs)
+
+    def start(self):
+        if not self.is_running:
+            self._timer = Timer(self.interval, self._run)
+            self._timer.start()
+            self.is_running = True
+
+    def stop(self):
+        self._timer.cancel()
+        self.is_running = False
+        print("exit6..")
+def get_estop_status():
+    if (s.task_state == linuxcnc.STATE_ESTOP):
+        return "1"
+    else:
+        return "0"
+
+class UARM_states:
+    def __init__(self, obj, stat):
+        self.obj = obj
+        self.stat = stat
+        self.position_0 = "0"
+        self.position_1 = "0"
+        self.position_2 = "0"
+        self.joint_0 = "0"
+        self.joint_1 = "0"
+        self.joint_2 = "0"
+        self.color = color_str[color]
+        self.switch = switch_test
+        self.estop = get_estop_status()
+	self.pump = h["pump"]
+        self.str_var = '{ "position_0" :  "%s",\
+                           "position_1" :   "%s", \
+                           "position_2" : "%s",\
+                           "joint_0" : "%s",\
+                           "joint_1" : "%s",\
+                           "joint_2" : "%s",\
+                           "color": "%s",\
+                           "switch": "%s",\
+                           "estop": "%s",\
+                           "pump": "%s"}'
+        var = (self.position_0, self.position_1, self.position_2, self.joint_0, self.joint_1, self.joint_2, self.color, self.switch, self.estop, self.pump)
+        self.variable = obj.add_variable(idx, 'UARM_status', ua.Variant(self.str_var % var, ua.VariantType.String))
+    def get_variable(self):
+        var = (self.position_0, self.position_1, self.position_2, self.joint_0, self.joint_1, self.joint_2, self.color, self.switch, self.estop, self.pump)
+        return ua.Variant(self.str_var % var,ua.VariantType.String)
+    def update(self):
+	p = position_get()
+        self.position_0 = p[0][0]
+        self.position_1 = p[0][1]
+        self.position_2 = p[0][2]
+        self.joint_0 = p[1][0]
+        self.joint_1 = p[1][1]
+        self.joint_2 = p[1][2]
+        self.color = color_str[color]
+        self.estop = get_estop_status
+        self.switch = switch_test
+        self.pump = h["pump"]
+        self.variable.set_value(self.get_variable())
+    def start(self):
+        self.timer = RepeatedTimer(0.5,self.update)
+        self.timer.start()
+
+    def stop(self):
+        self.timer.stop()
+    
+    def set_switch(self, s):
+        global switch_test
+        switch_test = s
+    
+    def set_color(self, s):
+        global color
+        color = color_str.index(s) 
+    
+    def set_estop(self, s):
+        if s == "off":
+            estop_set(1)
+        else:
+            estop_set(0)
+UARM_s = UARM_states(UARM_obj, s)	
+UARM_s.start()
+def signal_exit_handler(signum, frame):
+    global pipe_w
+    global get_co_thread
+    global running
+    print("exit..")
+    os.write(pipe_w, 'q')
+    print("exit1..")
+    get_co_thread.join()
+    print("exit2..")
+    running = 0
+    print("exit3..")
+    UARM_s.stop()
+    print("exit4..")
+
+signal.signal(signal.SIGINT, signal_exit_handler)
+server.start()
 while(running):
     if h['s_switch']:
         uarm_state = Uarm_states.START
-    print("uarm_state:", uarm_state)
+    #print("uarm_state:", uarm_state)
     states_switch[uarm_state]()
 
+print("exit5..")
 
