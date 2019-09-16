@@ -759,6 +759,7 @@ def action_down():
     move_to([down_pos[0][0], down_pos[0][1], pump_top - 15],speed = 100, isBlock=False)
     while not h["s_pump"]:
         s.poll()
+        print(h["s_pump"])
         if s.state == linuxcnc.RCS_DONE:
             break
     
@@ -939,15 +940,15 @@ class UARM_states:
         var = (self.position_0, self.position_1, self.position_2, self.joint_0, self.joint_1, self.joint_2, self.color, self.switch, self.estop, self.pump)
         return ua.Variant(self.str_var % var,ua.VariantType.String)
     def update(self):
-	p = position_get()
-        self.position_0 = p[0][0]
-        self.position_1 = p[0][1]
-        self.position_2 = p[0][2]
-        self.joint_0 = p[1][0]
-        self.joint_1 = p[1][1]
-        self.joint_2 = p[1][2]
-        self.color = color_str[color]
-        self.estop = get_estop_status
+#	p = position_get()
+#        self.position_0 = p[0][0]
+#        self.position_1 = p[0][1]
+#        self.position_2 = p[0][2]
+#        self.joint_0 = p[1][0]
+#        self.joint_1 = p[1][1]
+#        self.joint_2 = p[1][2]
+#        self.color = color_str[color]
+#        self.estop = get_estop_status()
         self.switch = switch_test
         self.pump = h["pump"]
         self.variable.set_value(self.get_variable())
@@ -992,8 +993,7 @@ server.start()
 while(running):
     if h['s_switch']:
         uarm_state = Uarm_states.START
-    #print("uarm_state:", uarm_state)
+    print("uarm_state:", uarm_state)
     states_switch[uarm_state]()
-
-print("exit5..")
+server.stop()
 
