@@ -26,7 +26,8 @@ def get_ip_address(ifname):
     )[20:24])
 
 
-Host=get_ip_address("br0")
+#Host=get_ip_address("br0")
+Host="0.0.0.0"
 Port=12346
 running = 1
 
@@ -194,7 +195,6 @@ def receive_coordinate (datq, sev, gev,pipe_r):
                         except:
                             pass
                         exit(0)
-                        print("Exit7..")
             else:
                 data = s.recv(24)
                 if data:
@@ -212,7 +212,7 @@ def receive_coordinate (datq, sev, gev,pipe_r):
                     else:
                         wifi_lost_num = 0
                         data_s += data
-                        #print(data_s)
+                        print(data_s)
     		        if find_head == 0:
             	    	    index_h = data_s.find("S")
             	    	    if index_h >= 0:
@@ -450,11 +450,13 @@ def get_cos(segment_index=1, timeout=1):
     gev.wait(timeout)
     cos = []
     if not gev.isSet():
+        print("no set")
         return []
     try:
         data=datq.get().split('*')
         data = data[segment_index].split('/')[color].split('.')[1:]
     except:
+        print("data error")
         return []
     for dat in data:
         dat = dat.split(':')
@@ -462,6 +464,7 @@ def get_cos(segment_index=1, timeout=1):
             y = int(dat[1])   / -2.0  
             x = int(dat[3]) / -2.4
         except:
+            print("data too small")
             continue
 
         if segment_index == 1:
@@ -562,10 +565,12 @@ def action_start():
     machine_set(1)
     task_mode_set(linuxcnc.MODE_MANUAL)
     unhome_joints(joints)
-
     while h['s_switch']:
+        time.sleep(0.5)
         pass
+
     while not h['s_switch']:
+        time.sleep(0.5)
         pass
 
     switch_test = "1"
@@ -575,6 +580,7 @@ def action_start():
     task_mode_set(linuxcnc.MODE_MDI)
     move_to([250, 0, 140])
     while h['s_switch']:
+        time.sleep(0.5)
         v = get_coordenate()
         if len(v):
             print("test: ", get_machine_coordenate(v))
@@ -648,10 +654,15 @@ def get_machine_coordenate(v, p=None, isComfirm=None, isDetect = None):
 de_top=220
 de_speed=5000
 de_pos={0:("g0",230,0,de_top, 10000), 
-       1:("g16", -10, de_speed),
-       2:("g16", 10, de_speed),
-       3:("g16", 0, de_speed),
+       1:("g1",  230, -40, de_top, de_speed),
+       2:("g1",  230, 40, de_top, de_speed),
+       3:("g1",  230, 0, de_top, de_speed),
        }
+#de_pos={0:("g0",230,0,de_top, 10000), 
+#       1:("g16", -10, de_speed),
+#       2:("g16", 10, de_speed),
+#       3:("g16", 0, de_speed),
+#       }
 de_step = 0
 def detection_move():
     global de_step
@@ -831,6 +842,8 @@ states_switch = {
 def UARM_cmd_set(args):
     if (args[0] == 'switch'):
         return UARM_s.set_switch(args[1])
+    if (args[0] == 'restart'):
+        return UARM_s.restart()
     elif (args[0] == 'color'):
         return UARM_s.set_color(args[1])
     else:
@@ -985,6 +998,9 @@ class UARM_states:
             estop_set(1)
         else:
             estop_set(0)
+    def restart(self):
+        signal_exit_handler(1, "dump")
+
 UARM_s = UARM_states(UARM_obj, s)	
 UARM_s.start()
 def signal_exit_handler(signum, frame):
