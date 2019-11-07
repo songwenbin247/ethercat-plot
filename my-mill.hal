@@ -89,7 +89,7 @@ net zenable joint.2.amp-enable-out => stepgen.2.enable
 #net pump  motion.digital-out-01 => lcec.0.3.dout-2
 #net check  motion.digital-in-00 <= lcec.0.2.din-2
 
-net tong  motion.digital-out-00 => lcec.0.3.dout-0
+#net tong  motion.digital-out-00 => lcec.0.3.dout-0
 
 net estop-out <= iocontrol.0.user-enable-out
 net estop-out => iocontrol.0.emc-enable-in
@@ -106,7 +106,7 @@ setp uarmkins_3d.d-1 13.2
 setp uarmkins_3d.d-2 147.16783006267287
 setp uarmkins_3d.d-3 158.8
 #setp uarmkins.d-3 159.1233779614373
-setp uarmkins_3d.d-4 56
+setp uarmkins_3d.d-4 60
 setp uarmkins_3d.d-5 60
 setp uarmkins_3d.d-6 40
 

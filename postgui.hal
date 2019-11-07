@@ -4,4 +4,7 @@ net check <= lcec.0.2.din-2
 net check => IO.s_pump
 net s_switch <= lcec.0.2.din-0
 net s_switch => IO.s_switch
-
+net rt_power => lcec.0.3.dout-1
+net rt_power <= IO.rt_power
+net rt_reset => lcec.0.3.dout-0
+net rt_reset <= IO.rt_reset

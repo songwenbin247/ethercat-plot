@@ -16,7 +16,25 @@ import fcntl
 import struct
 from threading import Timer
 from opcua import ua, uamethod, Server
+import errno
 
+sock_log = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    sock_log.connect(("10.193.20.62", 6000))
+except:
+    pass
+def print_log(log):
+    try:
+        sock_log.send(log + '\n')
+        
+    except:
+        pass
+
+edgescle_ip="192.168.0.1"
+#edgescle_ip="10.193.20.33"
+edgescle_port=8280
+print_log("log test\n")
+wifi_client = 0
 def get_ip_address(ifname):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     return socket.inet_ntoa(fcntl.ioctl(
@@ -31,40 +49,70 @@ Host="0.0.0.0"
 Port=12346
 running = 1
 
-
-
 # The color which well be catched
 # 0 : Red
 # 1 : Green
 # 2 : Yellow
 # 3 : Blue
 
-
 color=0
 color_str=["Red", "Green", "Yellow", "Blue"]
 switch_test="0"
 wifi_lost_num=0
 
-class switch_status(object):
+heartbeat_id = 0
+
+h = hal.component("IO")
+h.newpin("pump", hal.HAL_BIT, hal.HAL_OUT)
+h.newpin("s_switch", hal.HAL_BIT, hal.HAL_IN)
+h.newpin("s_pump", hal.HAL_BIT, hal.HAL_IN)
+h.newpin("rt_power", hal.HAL_BIT, hal.HAL_OUT)
+h.newpin("rt_reset", hal.HAL_BIT, hal.HAL_OUT)
+h.ready()
+
+h["pump"] = 1
+h["rt_power"] = 1
+h["rt_reset"] = 0
+
+def rt_reset():
+    h["rt_reset"] = 1
+    time.sleep(0.5)
+    h["rt_reset"] = 0
+
+
+def get_wifi_status():
+    global wifi_lost_num
+    try:
+        wifi_client.send('\x5a\x5a\x00\x00\x10\x00\x00\x00\x00\x00\x00\x00')   # send heartbeat to rt
+    except:
+        pass
+    if (wifi_lost_num > 2):
+        return "1"
+    else:
+        wifi_lost_num += 1
+        return "0"
+
+class timer_call(object):
     def __init__(self, interval, callback, *args, **kwargs):
-	self._timer     = None
-	self.interval   = interval
-	self.args       = args
-	self.kwargs     = kwargs
-	self.callback   = callback
-	self.is_running = False
-	self._delays = 0
+        self._timer     = None
+        self.interval   = interval
+        self.args       = args
+        self.kwargs     = kwargs
+        self.callback   = callback
+        self.is_running = False
+        self._delays = 0
         self.start()
 
     def _run(self):
-	if self._delays > 0:
-	        self.is_running = False				
-	        self.start()
-		self._delays -= 1
-	else:
-		self.callback(*self.args, **self.kwargs)
-	        self.is_running = False				
-	
+        if self._delays > 0:
+                self.is_running = False
+                self.start()
+                self._delays -= 1
+        else:
+                self.callback(*self.args, **self.kwargs)
+                self.is_running = False
+                self.start()
+
     def start(self):
         if not self.is_running:
             self.is_running = True
@@ -73,89 +121,571 @@ class switch_status(object):
 
     def stop(self):
         if self.is_running:
-	    self._timer.cancel()
+            self._timer.cancel()
             self.is_running = False
-
     def delay(self,n = 1):
         self._delays = n
-    
+
     def delay_clear(self,):
-    	self._delays = 0
+        self._delays = 0
 
-#sr.Microphone.list_microphone_names()
+header = [0x55, 0xAA, 0x5A, 0x5A]
+header_str= '\x55\xaa\x5a\x5a'
+version = [0x00, 0x01]
+version_str = '\x00\x01'
 
-#r = sr.Recognizer()
-#m = sr.Microphone()
-#color_code = {u'\u7ea2' : 0, u'\u7eff' : 1, u'\u9ec4' : 2, u'\u84dd' : 3}
+devid_str = "i.MX_led_id0"
+mydevid = bytearray(list(devid_str) + ['\x00'] * (64 - len(devid_str)))
+type_reg = [0x00, 0x01]
+type_reg_reply = "\x00\x02"
+type_unreg = [0x00, 0x03]
+type_unreg_reply = "\x00\x04"
+type_set = "\x00\x05"
+type_set_reply =  [0x00, 0x06]
+type_get = "\x00\x07"
+type_get_reply =   [0x00, 0x08]
+type_ota =  "\x00\x09"
+type_ota_reply = [0x00, 0x0A]
+type_event = [0x00, 0x0B]
+color=0
+color_str=["Red", "Green", "Yellow", "Blue"]
+color_str_l=["red", "green", "yellow", "blue"]
 
-color_code = {u'red' : 0, u'green' : 1, u'yellow' : 2, u'blue' : 3}
-def judge_which_color(s):
-    for c in color_code.keys():
-  #      for i in s:
-  #          print i
-  #          if c == i:
-        if c in s:
-                return color_code[c]
-    return None
+ota_server_port = 8089
+ota_header_str='\x5A\x5A'
+ota_package_size = 2048
 
+OTA_GET_VERSION	= 0x01
+OTA_UPDATE_REQ	= 0x02
+OTA_UPDATE_START = 0x03
+OTA_UPDATE_CONTINUE	= 0x04
+OTA_UPDATE_RETRANS	= 0x05
+OTA_UPDATE_DATA		= 0x06
+OTA_UPDATE_FINISH	= 0x07
+OTA_START_LOG		= 0x08
+OTA_ENTER_CONSOLE	= 0x09
+OTA_CMD_ERASE		= 0x0A
+OTA_CMD_UPDATE		= 0x0B
+OTA_CMD_ROLLBACK	= 0x0C
+OTA_CMD_ERASE_OK	= 0x0D
+OTA_CMD_ERASE_ERR	= 0x0E
+OTA_CMD_REBOOT      = 0x0F
 
+class ota(object):
+    def __init__(self, port):
+        self.ota_port = port
+        self.timer = timer_call(1, self.run)
+        self.ota_status = 0
+        self.ota_recv = ""
+        self.ota_cmd = 0
+        self.ota_version = 0
+        self.ota_firmware = []
+        self.ota_firmware_name = ""
+        self.ota_firmware_index = 0
+        self.ota_index = 0
+        self.version = 0
+        self.firmware_name = ""
+        self.find_header = 0
+        self.ota_sk = -1
+        self.ota_ck = -1
+        h["rt_power"] = 0
 
-def exit_wakeup():
-    global recog_status
-    recog_status = 0
-    print("Wait to wake up")
+    def ota_cmd_erase(self):
+        self.ota_cmd = 1
+        print_log("get_ota_cmd_erase")
 
+    def ota_cmd_update(self):
+        self.ota_cmd = 0
+        print_log("get_ota_cmd_update")
 
-recog_status = 0 # no wake up
-recog_status_handle = None
-def speech_callback(r, audio):
-    global color
-    global recog_status
-    global recog_status_handle
-    print("got it!  Now to recognize it...")
-    if recog_status == 0:
+    def ota_cmd_force(self):
+        self.ota_cmd = 2
+        print_log("get_ota_cmd_force")
+
+    def ota_set_firmware(self, image, file_version, name=""):
+        self.ota_firmware = image
+        print_log(file_version)
         try:
-            str = r.recognize_sphinx(audio,keyword_entries=[("select", 0.8)],show_all=False)
-            print("you said : ", str)
-            if str[:6] == "select":
-                recog_status = 1
-                recog_status_handle = switch_status(40, exit_wakeup)
-        except sr.UnknownValueError:
-            print("Sphinx could not understand audio")
-        except sr.RequestError as e:
-            print("Sphinx error; {0}".format(e))
-    else:
+            self.ota_version = int(file_version)
+        except:
+            pass
+        self.ota_firmware_name = name
+        print_log("set_newfiemware: %s - %s" % (self.ota_firmware_name, file_version))
+
+    def short_to_list_little(self, i):  # little endian
+        ret = []
+        ret.append(i & 0xff)
+        ret.append((i >> 8) & 0xff)
+        return ret
+
+    def int_to_list_little(self, i):  # little endian
+        ret = []
+        ret.append(i & 0xff)
+        ret.append((i >> 8) & 0xff)
+        ret.append((i >> 16) & 0xff)
+        ret.append((i >> 24) & 0xff)
+        return ret
+
+    def list_to_short_little(self, l):  # little endian
+        return (ord(l[1]) << 8) + ord(l[0])
+
+    def ota_calc_checksum(self, val):
+        l = len(val) / 2
+        val_int16 = [(ord(val[i + 1]) << 8) + ord(val[i]) for i in range(0, len(val), 2)]
+        sum = 0
+        for i in val_int16:
+            sum += i
+        return self.short_to_list_little(sum)
+    def ota_disruption(self):
+        self.timer.stop()
         try:
-            #s = r.recognize_google(audio, language="zh")
-            s = r.recognize_google(audio, language="en")
-            print("Google Speech Recognition thinks you said:", s)
-            col = judge_which_color(s)
-            if col is None:
-                print("Can not judge the color, so remain the %s" % color_str[color])
+            self.ota_ck.close()
+        except:
+            pass
+        try:
+            self.ota_sk.close()
+        except:
+            pass
+        print_log("ota_disruption..")
+    
+    def ota_rt_restart(self):
+        print_log("ota_rt_restart")
+        rt_reset()
+        try:
+            self.ota_ck.send('\x5a\x5a\x00\x00\x0F\x00\x00\x00\x00\x00\x00\x00')
+            print_log("wifi_clinet send reset to bootload")
+        except:
+            print_log("wifi_client send reset failed to bootload")
+            pass
+        
+
+        try:
+            print_log( wifi_client)
+            wifi_client.send('\x5a\x5a\x00\x00\x0F\x00\x00\x00\x00\x00\x00\x00')
+            print_log("wifi_client send reset to OpenMV")
+        except:
+            print_log("wifi_client send reset failed to OpenMV")
+            pass
+
+    def ota_update(self):
+        self.ota_ck.setblocking(True)
+        self.ota_ck.settimeout(5.0)
+        self.ota_firmware_index = 0
+        self.ota_index = 1
+        self.ota_recv = ""
+        packet_size = 0
+        flash_erase_timeout = 6   # waiting rt erase flash 30 seconds, or reboot rt chip..
+        print_log("ota_update start...")
+
+        if self.ota_status ==  5:   # send a update request to rt
+            self.ota_ck.send('\x5a\x5a' + bytearray(self.short_to_list_little(self.ota_version))
+                     + '\x02\x00\x00\x00\x05\x00\x00\x00' + bytearray(self.int_to_list_little(len(self.ota_firmware))))
+        print_log("\tota_update send the update request")
+        if self.ota_status >= 5 :
+            find_header = 0
+            while True:
+                try:
+                    recv = self.ota_ck.recv(64)
+                    if recv == "":  # tcp connection is disconnected
+                        self.ota_ck.close()
+                        self.ota_status = 1  # re-waiting for rt to connect
+                        return
+
+                    self.ota_recv += recv
+                    if not find_header:
+                        index = self.ota_recv.find(ota_header_str)
+                        if index < 0:
+                            self.ota_recv = ""
+                        else:
+                            self.ota_recv = self.ota_recv[index:]  # make sure the self.recv begin with Frame_header
+                            find_header = 1
+
+                    recv_len = len(self.ota_recv)
+                    if recv_len < 12:
+                        continue
+
+                    if ord(self.ota_recv[4]) == OTA_UPDATE_CONTINUE and self.ota_status >= 6 :
+                        self.ota_index += packet_size
+                        self.ota_firmware_index += 1
+                        self.ota_status = 7
+
+                    if ord(self.ota_recv[4]) == OTA_UPDATE_START:
+                        self.ota_index = 0
+                        self.ota_firmware_index = 0
+                        self.ota_status = 6
+                        print_log("\tota_update starts..")
+
+                    if ord(self.ota_recv[4]) == OTA_UPDATE_RETRANS:
+                        self.ota_status += 1
+                        print_log("\tota_update retrans: index: %s try_times: %s." % (self.ota_index, self.ota_status - 7))
+                        if  self.ota_status - 7 > 10: # the time of re-transmit > 10.  reboot RT
+                            self.ota_ck.send('\x5a\x5a\x00\x00\x0F\x00\x00\x00\x00\x00\x00\x00')
+                            print_log("\tota_update retrans failed, will reboot RT chip..")
+                            break
+
+                    if ord(self.ota_recv[4]) == OTA_UPDATE_FINISH:
+                        print_log("\tota_update is finished")
+                        break
+
+                    if len(self.ota_firmware) - self.ota_index > ota_package_size :
+                        packet_size = ota_package_size
+                    else :
+                        packet_size = len(self.ota_firmware) - self.ota_index
+
+                    check_sum = self.ota_calc_checksum(self.ota_firmware[self.ota_index: self.ota_index + packet_size])
+                    self.ota_ck.send('\x5a\x5a' + bytearray(self.short_to_list_little(self.ota_firmware_index))
+                                        + '\x06\x00\x00\x00' + bytearray(self.short_to_list_little(packet_size))
+                                        + bytearray(check_sum)
+                                        + bytearray(self.ota_firmware[self.ota_index: self.ota_index + packet_size] + '\x00' * (ota_package_size - packet_size)))
+                    self.ota_recv = ""
+                except socket.error as msg:
+                    if msg.message == 'timed out' and self.ota_status == 5: 
+                        if flash_erase_timeout > 0:
+                            flash_erase_timeout -= 1
+                        else:
+                            self.ota_ck.send('\x5a\x5a\x00\x00\x0F\x00\x00\x00\x00\x00\x00\x00')
+                            print_log("\tota_update erase flash timeout, will reboot RT chip..")
+                            break
+                    else:
+                        break
+            self.ota_ck.close()
+            self.ota_status = 1  # re-waiting for rt to connect
+
+    def run(self):
+        if self.ota_status == 0:   #  ota tcp service is ready
+            try:
+                self.ota_sk= socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.ota_sk.bind(("0.0.0.0", self.ota_port))
+                self.ota_sk.setblocking(False)
+                self.ota_sk.listen(2)
+                self.ota_status = 1
+                print_log("ota_: start listen %d" % self.ota_port)
+            except socket.error as msg:
+                self.timer.delay(5)
+                self.ota_sk.close()
+                print_log("ota_: %s and retry after 5s" % msg.strerror)
+        if self.ota_status >= 1:         # waiting for rt to connect
+            try:
+                ota_ck, _ = self.ota_sk.accept()  # if new connection come before the last connection disconnected, close the old connection.
+                print_log("ota : new connection ..")
+                try:
+                    self.ota_ck.close()
+                except:
+                    pass
+                self.ota_ck = ota_ck
+                self.ota_ck.setblocking(False)
+                self.ota_status = 2
+            except socket.error as msg:
+                if msg.errno != errno.EAGAIN:
+                    self.ota_sk.close()
+                    self.ota_status = 0
+                else:
+                    pass
+
+        if self.ota_status > 4:  # Rt has no firmware and it is ready to update
+            if self.ota_version != 0 and len(self.ota_firmware) != 0:
+                self.ota_update()
             else:
-                color = col
-                recog_status_handle.delay(2)
-                print("Switch to color %s "% color_str[color])
-        except sr.UnknownValueError:
-            print("Google Speech Recognition could not understand audio")
-        except sr.RequestError as e:
-            print("Could not request results from Google Speech Recognition service; {0}".format(e))
-    if recog_status == 0:
-        print("Wait to wake up... ")
-    else:
-        print("Waiting for speech instruction ... ")
+                print_log("ota : frimware is not ready")
+                return
 
-#with m as source:
-#    r.adjust_for_ambient_noise(source)
+        if self.ota_status > 1:    # the tcp connection has been established
 
-#r.dynamic_energy_threshold = False
-#r.dynamic_energy_adjustment_damping = 0.1
-#r.dynamic_energy_adjustment_ratio = 2
-#r.energy_threshold = 800
+            try:
+                recv = self.ota_ck.recv(64)
+                if recv == "":      # tcp connection is disconnected
+                    self.ota_ck.close()
+                    self.ota_status = 1  # re-waiting for rt to connect
+                    print_log("ota : tcp client is disconected")
+                    return
 
-#print("Wait to wake up... ")
-#stop_listening = r.listen_in_background(m, speech_callback)
+                self.ota_recv += recv
+                while True:
+                    if not self.find_header:
+                        index = self.ota_recv.find(ota_header_str)
+                        if index < 0:
+                            self.recv = ""
+                            return
+                        self.ota_recv = self.ota_recv[index:]  # make sure the self.recv begin with Frame_header
+                        self.find_header = 1
 
+                    recv_len = len(self.ota_recv)
+                    if recv_len < 12:
+                        return
+
+                    if ord(self.ota_recv[4]) ==  OTA_START_LOG:
+                        print_log("ota : Recv OTA_START_LOG")
+                        self.ota_status = 2         #  rt is online
+                        if self.ota_cmd == 1:       # send erase cmd after rt is online
+                            print_log("ota : Send OTA_CMD_ERASE")
+                            self.ota_ck.send('\x5a\x5a\x00\x00\x0a\x00\x00\x00\x00\x00\x00\x00')
+                            self.ota_status = 3     # waiting for rt to reply.
+                        else:     # send get_version cmd
+                            print_log("ota : Send OTA_GET_VERSION")
+                            self.ota_ck.send('\x5a\x5a\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00')
+                            self.ota_status = 4
+
+                    if ord(self.ota_recv[4]) == OTA_CMD_ERASE_OK or ord(self.ota_recv[4]) == OTA_CMD_ERASE_ERR:
+                            # reboot the rt
+                            if ord(self.ota_recv[4]) == OTA_CMD_ERASE_OK:
+                                print_log("ota : recv OTA_CMD_ERASE_OK")
+                            else:
+                                print_log("ota : recv OTA_CMD_ERASE_ERR")
+                            self.ota_cmd = 0        #
+                            self.ota_status = 1
+                            self.ota_ck.send('\x5a\x5a\x00\x00\x0F\x00\x00\x00\x00\x00\x00\x00')
+                            self.ota_ck.close()
+                            self.ota_status = 1
+
+                    if ord(self.ota_recv[4]) ==  OTA_GET_VERSION:
+                        print_log("ota : recv OTA_GET_VERSION")
+                        if self.ota_status != 4:
+                            self.ota_ck.send('\x5a\x5a\x00\x00\x0F\x00\x00\x00\x00\x00\x00\x00')
+                            self.ota_ck.close()
+                            self.ota_status = 1
+                            print_log("ota : recv OTA_GET_VERSION with status != 4, reboot rt..")
+                        else:
+                            dat_len = self.list_to_short_little(self.ota_recv[8:10])
+                            if recv_len < 12 + dat_len:
+                                return
+                            self.version = self.list_to_short_little(self.ota_recv[2:4])
+                            self.firmware_name = self.ota_recv[12:dat_len + 12]
+                               # has got the rt version information
+                            print_log("ota : rt version = %d ota_version = %d" % (self.version, self.ota_version))
+                            if self.ota_cmd == 2 or self.version == 0 or self.ota_version > self.version:
+                                self.ota_status = 5
+                                self.ota_cmd = 0
+
+                            else:
+                                print_log("ota OTA_UPDATE_FINISH")
+                                self.ota_status = 1  # tell rt to go ahead
+                                self.ota_ck.send('\x5a\x5a\x00\x00\x07\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
+                                self.ota_ck.close()
+                    self.find_header = 0
+                    self.ota_recv = self.ota_recv[12:]
+            except socket.error as msg:
+                if msg.errno != errno.EAGAIN:  # reboot RT
+                    try:
+                        self.ota_ck.send('\x5a\x5a\x00\x00\x0F\x00\x00\x00\x00\x00\x00\x00')
+                        self.ota_ck.close()
+                    except:
+                        pass
+                    self.ota_status = 1
+
+
+class edgescale(object):
+    def __init__(self, ip, port):
+        self.ip = ip
+        self.port = port
+        self.status = 0
+        self.timer = timer_call(1, self.run)
+        self.recv = ''
+        self.find_header = 0
+	self.ota = ota(ota_server_port)
+			
+    def version_check(self, v):
+        if v == version_str:
+            return True
+        return False
+
+    def devid_check(self, devid):
+        if devid == mydevid:
+            return True
+        return False
+
+    def reg_reply_check(self, res):
+        if res[0:2] == 'ok':
+            return True
+        return False
+
+    def set_attr(self, attr):
+        print_log("set_attr ")
+        print_log(attr[0:5])
+        print_log("set_value ")
+        print_log(attr[68:74])
+        if (attr[0:5] == 'color'):
+            global  color
+            if attr[68:71] == 'red' or attr[68:71] == 'Red':
+                color = 0
+            elif attr[68:73] == 'green' or attr[68:73] == 'Green':
+                color = 1
+            elif attr[68:74] == 'yellow' or attr[68:74] == 'Yellow':
+                color = 2
+            elif attr[68:72] == 'blue' or attr[68:72] == 'blue':
+                color = 3
+            else:
+                pass
+        if (attr[0:6] == 'reboot'):
+            self.ota.ota_rt_restart()
+
+    def get_attr(self, attr):
+        print_log("get_attr ")
+        print_log(attr[0:5])
+        if (attr[0:5] == 'color'):
+            print_log(color_str_l[color]);
+            color_value = color_str_l[color] + '\x00' * (64 - len(color_str_l[color]))
+            color_arr = "color" + '\x00' * (64 - len("color"))
+            color_res = bytearray(header + version + type_get_reply + [0]*4 + self.struct_data(mydevid + color_arr +"ok"+ '\x00'*6 + "\x00\x00\x00\x04" + color_value))
+            self.sock.send(color_res)
+        else:
+            print_log("successed");
+            res_value = "\x00" + '\x00' * (64 - 1)
+            res = bytearray(header + version + type_get_reply + [0]*4 + self.struct_data(mydevid + attr[0:64] +"ok"+ '\x00'*6 + "\x00\x00\x00\x01" + res_value))
+            self.sock.send(res)
+
+    def int_to_list(self, i):
+        ret = []
+        ret.append((i >> 24) & 0xff)
+        ret.append((i >> 16) & 0xff)
+        ret.append((i >> 8) & 0xff)
+        ret.append(i & 0xff)
+        return ret
+
+    def str_to_int(self, s):
+        i  = ord(s[0]) << 24
+        i += ord(s[1]) << 16
+        i += ord(s[2]) << 8
+        i += ord(s[3])
+        return i
+
+    def calc_xorsum(self, l):
+        mask = 31
+        val = 0
+        for i in l:
+            if isinstance(i, str):
+                i = ord(i)
+            val ^= i << (i & mask)
+        return self.int_to_list(val)
+
+    def struct_data(self, dat):
+        if isinstance(dat, str) or isinstance(dat, bytearray):
+            dat = list(dat)
+        l = len(dat)
+        ret = self.int_to_list(l)
+        ret = ret + dat
+        ret = self.calc_xorsum(ret[4:]) + ret
+        return ret
+
+    def update_firmware(self, fm):
+        filename = fm[0:fm[0:64].find('\x00')]
+        file_type = fm[64:64 + fm[64:72].find('\x00')]
+        file_version = fm[72:72 + fm[72:80].find('\x00')]
+        check_type = fm[80:80 + fm[80:88].find('\x00')]
+        check_code = fm[88:152]
+        print(file_version)
+        if filename == "null.bin":
+            self.ota.ota_cmd_erase()
+        else:
+	    self.ota.ota_set_firmware(fm[152:], file_version, filename)
+	self.ota.ota_rt_restart()
+
+    #
+    def disruption(self):
+        self.timer.stop()
+        self.sock.close()
+        self.ota.ota_disruption()
+
+    def run(self):
+        print("self->status = %d", self.status)
+        if self.status == 0:
+            try:
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.sock.connect((self.ip, self.port))
+                self.sock.setblocking(False)
+                self.status = 1
+            except socket.error as msg:
+                if msg.errno == errno.EINPROGRESS:
+                    self.timer.delay(10)
+                elif msg.errno == errno.ECONNREFUSED:
+                    self.timer.delay(10)
+                else:
+                    self.timer.stop()
+                self.sock.close()
+                return
+
+        if self.status == 1:
+            devid = list(devid_str) + [0] * (64 - len(devid_str))
+            try:
+                self.sock.send(bytearray(header + version + type_reg +[0,0,0,0]+ self.struct_data(devid)))
+                self.status = 2
+            except  socket.error as msg:
+                if msg.errno != errno.EPIPE:
+                    self.timer.stop()
+                self.sock.close()
+                self.status = 0
+                return
+
+        if self.status > 1:
+            try:
+                re = self.sock.recv(1024)
+                if re == "":                   #tcp connection has been disconnected
+                    self.sock.close()
+                    self.status = 0
+                    return
+
+                self.recv += re
+                while True:
+                    if not self.find_header:
+                        index = self.recv.find(header_str)
+                        if index < 0:
+                            self.recv = ""
+                            return
+                        self.recv = self.recv[index:]   #self.recv will begin with Frame_header
+                        self.find_header = 1
+
+                    recv_len = len(self.recv)
+                    if recv_len < 20:
+                        return
+                    
+                    dat_len = self.str_to_int(self.recv[16:20])
+                    
+                    if self.recv[6:8] == type_ota:
+                        while recv_len <  dat_len + 20:
+                            recv = self.sock.recv(1024)
+                            if recv == "":                   #tcp connection has been disconnected
+                                self.sock.close()
+                                self.status = 0
+                                return
+                            self.recv += recv
+                            recv_len = len(self.recv)
+                    
+                    if recv_len <  dat_len + 20:
+                        return                # tool short, do not have a complete frame.  continue to receive
+
+                    xorsum = [ord(i) for i in self.recv[12:16]]
+                    if self.version_check(self.recv[4:6]) and xorsum == self.calc_xorsum(self.recv[20:20+dat_len]) and self.devid_check(self.recv[20:84]):
+                            if self.recv[6:8] == type_reg_reply:
+                                if self.reg_reply_check(self.recv[84:92]):
+                                    self.status = 11
+                                else:
+                                    self.status = 1   #register is failed, return status 1 to re-register
+                            elif self.recv[6:8] == type_set:
+                                self.set_attr(self.recv[84:216])
+                            elif self.recv[6:8] == type_get:
+                                self.get_attr(self.recv[84:152])
+                            elif self.recv[6:8] == type_ota:
+                                print_log("get ota_image");
+                                self.update_firmware(self.recv[84:dat_len + 20])
+                                self.sock.send(bytearray(header + version + type_ota_reply +[0,0,0,0]+ self.struct_data(mydevid + self.ota.ota_firmware_name + '\x00' * (64 - len(self.ota.ota_firmware_name)) + "ok" + '\x00'*10)))
+                            else:
+                                pass
+                    remain = recv_len - dat_len - 20
+                    if remain == 0:
+                        self.recv = ""
+                        self.find_header = 0
+                        return
+                    else:
+                        self.find_header = 0
+                        self.recv =  self.recv[dat_len + 20:]
+            except socket.error as msg:
+                 if msg.errno == errno.EAGAIN:    #Receive no data
+                    if self.status > 1 and self.status < 10:
+                        self.status += 1
+                    elif self.status == 10:
+                        self.statu = 1   # Register request reply timeout. re-send the register request.
+                 else :
+                    self.sock.close()
+                    self.timer.stop()
 #Receive the blocks coordinates sending from OpenMV.
 #Receive the set of the color we want to catch.
 #Receive the thread over command.
@@ -164,12 +694,12 @@ def receive_coordinate (datq, sev, gev,pipe_r):
     global running
     global color
     global wifi_lost_num
+    global wifi_client
     try:
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server.setblocking(0)
         server.bind((Host, Port))
     except:
-        running=0
         exit(0)
     server.listen(1)
     inputs = [server, pipe_r]
@@ -194,9 +724,15 @@ def receive_coordinate (datq, sev, gev,pipe_r):
                             inputs[2].close()
                         except:
                             pass
+                        print("recevice pthread exit..")
                         exit(0)
             else:
-                data = s.recv(24)
+                try:
+                    data = s.recv(24)
+                except:
+                    inputs.remove(s)
+                    s.close()
+
                 if data:
                     if data[0] == 'C': #set the color to filte 
                         if data[2:8] == 'Yellow':
@@ -210,9 +746,9 @@ def receive_coordinate (datq, sev, gev,pipe_r):
                         else:
                             color = color
                     else:
+                        wifi_client = s
                         wifi_lost_num = 0
                         data_s += data
-                        print(data_s)
     		        if find_head == 0:
             	    	    index_h = data_s.find("S")
             	    	    if index_h >= 0:
@@ -233,7 +769,6 @@ def receive_coordinate (datq, sev, gev,pipe_r):
         for s in exceptional:
             inputs.remove(s)
             s.close()
-
 
 class Uarm_states(Enum):
     START = 1
@@ -415,7 +950,7 @@ def get_a_co(scan_pos=None ,segment_index=2 ,timeout=1, isConfirm = None):
     return ret[li.index(min(li))]
     
 def get_coordenate(scan_pos=None, isConfirm = None):
-    time.sleep(1) 
+    time.sleep(0.5) 
     cos = [get_a_co(scan_pos, isConfirm=isConfirm) for i in range(3)]
     cos = filter(lambda c: c is not None, cos)
     if not len(cos) :
@@ -450,7 +985,6 @@ def get_cos(segment_index=1, timeout=1):
     gev.wait(timeout)
     cos = []
     if not gev.isSet():
-        print("no set")
         return []
     try:
         data=datq.get().split('*')
@@ -492,16 +1026,8 @@ get_co_thread = th.Thread(target=receive_coordinate,name="receive_coordinate",ar
 get_co_thread.setDaemon(True)
 get_co_thread.start()
 
-
-
-h = hal.component("IO")
-
-h.newpin("pump", hal.HAL_BIT, hal.HAL_OUT)
-h.newpin("s_switch", hal.HAL_BIT, hal.HAL_IN)
-h.newpin("s_pump", hal.HAL_BIT, hal.HAL_IN)
-h.ready()
+edge = edgescale(edgescle_ip, edgescle_port)
 os.system("halcmd source ./postgui.hal")
-h["pump"] = 1
 c = linuxcnc.command()
 s = linuxcnc.stat()
 e = linuxcnc.error_channel()
@@ -557,34 +1083,49 @@ def task_mode_set(mode,isPoll=True):
 
     
 joints=[1,1,1,0,0,0,0,0,0]
-
+opc_ua_triger = 0
+camera_adjust_step = 0
+def key_is_up():
+    if h['s_switch'] == 0:
+        return True
+# if opc_ua_triger == 1, skip the camera adjustment steps
 def action_start():
     global uarm_state
     global switch_test
-    estop_set(1)  # estop off
-    machine_set(1)
-    task_mode_set(linuxcnc.MODE_MANUAL)
-    unhome_joints(joints)
-    while h['s_switch']:
-        time.sleep(0.5)
-        pass
+    global camera_adjust_step
+    if opc_ua_triger == 0 and camera_adjust_step != 2:
+        if camera_adjust_step == 0:
+            if key_is_up():
+                camera_adjust_step = 1
+        elif camera_adjust_step == 1:
+            if not key_is_up():
+                camera_adjust_step = 2
 
-    while not h['s_switch']:
         time.sleep(0.5)
-        pass
+        return
 
-    switch_test = "1"
-    for i in range(0,8):
-        c.home(i)
-    cnc_util.wait_for_home(joints, timeout=20)
-    task_mode_set(linuxcnc.MODE_MDI)
-    move_to([250, 0, 140])
-    while h['s_switch']:
+    if camera_adjust_step != 3: 
+        estop_set(1)  # estop off
+        machine_set(1)
+        task_mode_set(linuxcnc.MODE_MANUAL)
+        unhome_joints(joints)
+        switch_test = "1"
+        for i in range(0,8):
+            c.home(i)
+        cnc_util.wait_for_home(joints, timeout=20)
+        task_mode_set(linuxcnc.MODE_MDI)
+        move_to([250, 0, 140])
+    
+    if camera_adjust_step == 2:
+        camera_adjust_step = 3
         time.sleep(0.5)
         v = get_coordenate()
         if len(v):
             print("test: ", get_machine_coordenate(v))
-        pass
+        if key_is_up():
+            camera_adjust_step = 0
+            time.sleep(0.5)
+            return
     uarm_state = Uarm_states.DETECT
 
 def position_check(ver):
@@ -778,7 +1319,6 @@ def action_down():
     move_to([down_pos[0][0], down_pos[0][1], pump_top - 15],speed = 100, isBlock=False)
     while not h["s_pump"]:
         s.poll()
-        print(h["s_pump"])
         if s.state == linuxcnc.RCS_DONE:
             break
     
@@ -843,20 +1383,31 @@ def UARM_cmd_set(args):
     if (args[0] == 'switch'):
         return UARM_s.set_switch(args[1])
     if (args[0] == 'restart'):
-        return UARM_s.restart()
+        edge.ota.ota_rt_restart()
+        return "ok"
     elif (args[0] == 'color'):
         return UARM_s.set_color(args[1])
+    elif (args[0] == 'ota_erase'):
+        edge.ota.ota_cmd_erase()
+        edge.ota.ota_rt_restart()
+        return "ok"
+    elif (args[0] == 'ota_force_update') or args[0] == 'ota_update':
+        if args[0] == 'ota_force_update':
+            edge.ota.ota_cmd_force()
+        with open('./image/version.log', 'r') as f:
+            ver = f.readline()[:-1]
+            name = f.readline()[:-1]
+        with open('./image/%s' % name, 'rb') as f:
+            dat = f.read()
+        edge.ota.ota_set_firmware(dat, ver, name)
+        edge.ota.ota_rt_restart()
+        return "ok"
+
+
     else:
         return "none"
 
 def UARM_cmd_get(args):
-    if (args[0] == 'switch'):
-        return UARM_s.set_switch(args[1])
-    elif (args[0] == 'color'):
-        return UARM_s.set_color(args[1])
-    elif (args[0] == 'estop'):
-        return UARM_s.set_estop(args[1])
-    else:
         return "none"
 
 @uamethod
@@ -928,13 +1479,6 @@ class RepeatedTimer(object):
     def stop(self):
         self._timer.cancel()
         self.is_running = False
-def get_wifi_status():
-    global wifi_lost_num
-    if (wifi_lost_num > 2):
-        return "1"
-    else:
-        wifi_lost_num += 1
-        return "0"
 
 class UARM_states:
     def __init__(self, obj, stat):
@@ -986,8 +1530,8 @@ class UARM_states:
         self.timer.stop()
     
     def set_switch(self, s):
-        global switch_test
-        switch_test = s
+        global opc_ua_triger
+        opc_ua_triger = s
     
     def set_color(self, s):
         global color
@@ -1011,13 +1555,14 @@ def signal_exit_handler(signum, frame):
     get_co_thread.join()
     running = 0
     UARM_s.stop()
+    edge.disruption()
 
 signal.signal(signal.SIGINT, signal_exit_handler)
 server.start()
 while(running):
     if h['s_switch']:
         uarm_state = Uarm_states.START
-    print("uarm_state:", uarm_state)
     states_switch[uarm_state]()
+print("exit...")
 server.stop()
 
