@@ -20,7 +20,8 @@ import errno
 
 sock_log = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 try:
-    sock_log.connect(("10.193.20.62", 6000))
+#    sock_log.connect(("10.193.20.62", 6000))
+    sock_log.connect(("10.193.21.151", 6000))
 except:
     pass
 def print_log(log):
@@ -223,11 +224,7 @@ class ota(object):
 
     def ota_set_firmware(self, image, file_version, name=""):
         self.ota_firmware = image
-        print_log(file_version)
-        try:
-            self.ota_version = file_version
-        except:
-            pass
+        self.ota_version = file_version.replace("_",".")
         self.ota_firmware_name = name
         print_log("set_newfiemware: %s - %s" % (self.ota_firmware_name, file_version))
 
@@ -344,6 +341,10 @@ class ota(object):
 
                     if ord(self.ota_recv[4]) == OTA_UPDATE_FINISH:
                         print_log("\tota_update is finished")
+                        self.version = self.ota_version
+                        self.firmware_name = self.ota_firmware
+                        self.ota_firmware = ""
+                        self.ota_version = ""
                         break
 
                     if len(self.ota_firmware) - self.ota_index > ota_package_size :
@@ -402,7 +403,7 @@ class ota(object):
                     pass
 
         if self.ota_status > 4:  # Rt has no firmware and it is ready to update
-            if self.ota_version != 0 and len(self.ota_firmware) != 0:
+            if self.ota_version != "" and len(self.ota_firmware) != 0:
                 self.ota_update()
             else:
                 print_log("ota : frimware is not ready")
@@ -471,7 +472,7 @@ class ota(object):
                             self.firmware_name = self.ota_recv[12:dat_len + 12]
                                # has got the rt version information
                             print_log("ota : rt version = %s ota_version = %s" % (self.version, self.ota_version))
-                            if self.ota_cmd == 2 or self.version == 0 or self.ota_file_version_to_int(self.ota_version) > self.ota_file_version_to_int(self.version):
+                            if self.ota_cmd == 2 or self.version == "0.0.0" or self.ota_file_version_to_int(self.ota_version) > self.ota_file_version_to_int(self.version):
                                 self.ota_status = 5
                                 self.ota_cmd = 0
 
@@ -591,12 +592,13 @@ class edgescale(object):
         file_version = fm[72:72 + fm[72:80].find('\x00')]
         check_type = fm[80:80 + fm[80:88].find('\x00')]
         check_code = fm[88:152]
-        print(file_version)
-        if filename == "null.bin":
+        print_log("update frimware: %s %s" % (filename, file_version))
+        if filename[0:4] == "null":
             self.ota.ota_cmd_erase()
         else:
 	    self.ota.ota_set_firmware(fm[152:], file_version, filename)
-	self.ota.ota_rt_restart()
+        if self.ota.version != "0.0.0":
+	    self.ota.ota_rt_restart()
 
     #
     def disruption(self):
@@ -605,7 +607,6 @@ class edgescale(object):
         self.ota.ota_disruption()
 
     def run(self):
-        print("self->status = %d", self.status)
         if self.status == 0:
             try:
                 self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
