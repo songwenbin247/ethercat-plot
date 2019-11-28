@@ -178,7 +178,7 @@ class ota(object):
         self.ota_status = 0
         self.ota_recv = ""
         self.ota_cmd = 0
-        self.ota_version = 0
+        self.ota_version = "0"
         self.ota_firmware = []
         self.ota_firmware_name = ""
         self.ota_firmware_index = 0
@@ -201,12 +201,31 @@ class ota(object):
     def ota_cmd_force(self):
         self.ota_cmd = 2
         print_log("get_ota_cmd_force")
+    
+    # version : 5.6.5 bits 
+
+    def ota_file_version_to_int(self, version_str):
+         vi = 0
+         v = version_str.split('.')
+         if (len(v) > 0):
+             vi = (int(v[0]) & 0x1f)<< 11
+         if (len(v) > 1):
+             vi += (int(v[1]) & 0x3f) << 5
+         if (len(v) > 2):
+             vi += int(v[2]) & 0x1f
+         return vi
+    def ota_int_to_file_version(self, version):
+         vi = [0,0,0]
+         vi[0] = (version >> 11) & 0x1f
+         vi[1] = (version >> 5) & 0x3f
+         vi[2] = (version) & 0x1f
+         return "%s.%s.%s" % tuple(vi)
 
     def ota_set_firmware(self, image, file_version, name=""):
         self.ota_firmware = image
         print_log(file_version)
         try:
-            self.ota_version = int(file_version)
+            self.ota_version = file_version
         except:
             pass
         self.ota_firmware_name = name
@@ -278,7 +297,7 @@ class ota(object):
         print_log("ota_update start...")
 
         if self.ota_status ==  5:   # send a update request to rt
-            self.ota_ck.send('\x5a\x5a' + bytearray(self.short_to_list_little(self.ota_version))
+            self.ota_ck.send('\x5a\x5a' + bytearray(self.short_to_list_little(self.ota_file_version_to_int(self.ota_version)))
                      + '\x02\x00\x00\x00\x05\x00\x00\x00' + bytearray(self.int_to_list_little(len(self.ota_firmware))))
         print_log("\tota_update send the update request")
         if self.ota_status >= 5 :
@@ -448,11 +467,11 @@ class ota(object):
                             dat_len = self.list_to_short_little(self.ota_recv[8:10])
                             if recv_len < 12 + dat_len:
                                 return
-                            self.version = self.list_to_short_little(self.ota_recv[2:4])
+                            self.version = self.ota_int_to_file_version(self.list_to_short_little(self.ota_recv[2:4]))
                             self.firmware_name = self.ota_recv[12:dat_len + 12]
                                # has got the rt version information
-                            print_log("ota : rt version = %d ota_version = %d" % (self.version, self.ota_version))
-                            if self.ota_cmd == 2 or self.version == 0 or self.ota_version > self.version:
+                            print_log("ota : rt version = %s ota_version = %s" % (self.version, self.ota_version))
+                            if self.ota_cmd == 2 or self.version == 0 or self.ota_file_version_to_int(self.ota_version) > self.ota_file_version_to_int(self.version):
                                 self.ota_status = 5
                                 self.ota_cmd = 0
 
@@ -1094,7 +1113,6 @@ def action_start():
     global switch_test
     global camera_adjust_step
     global opc_ua_triger
-    print_log("camera_adjust_step = %d" % camera_adjust_step)
     if opc_ua_triger == 0 and camera_adjust_step != 2:
         if camera_adjust_step == 0:
             if key_is_up():
