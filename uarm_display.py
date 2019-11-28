@@ -1093,6 +1093,8 @@ def action_start():
     global uarm_state
     global switch_test
     global camera_adjust_step
+    global opc_ua_triger
+    print_log("camera_adjust_step = %d" % camera_adjust_step)
     if opc_ua_triger == 0 and camera_adjust_step != 2:
         if camera_adjust_step == 0:
             if key_is_up():
@@ -1124,8 +1126,9 @@ def action_start():
             print("test: ", get_machine_coordenate(v))
         if key_is_up():
             camera_adjust_step = 0
-            time.sleep(0.5)
+        else:
             return
+    opc_ua_triger = 0
     uarm_state = Uarm_states.DETECT
 
 def position_check(ver):
