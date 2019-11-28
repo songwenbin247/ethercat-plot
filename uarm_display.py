@@ -1102,7 +1102,7 @@ def task_mode_set(mode,isPoll=True):
 
     
 joints=[1,1,1,0,0,0,0,0,0]
-opc_ua_triger = 0
+opc_ua_triger = 'unset'
 camera_adjust_step = 0
 def key_is_up():
     if h['s_switch'] == 0:
@@ -1113,7 +1113,7 @@ def action_start():
     global switch_test
     global camera_adjust_step
     global opc_ua_triger
-    if opc_ua_triger == 0 and camera_adjust_step != 2:
+    if opc_ua_triger == 'unset' and camera_adjust_step != 2:
         if camera_adjust_step == 0:
             if key_is_up():
                 camera_adjust_step = 1
@@ -1146,7 +1146,6 @@ def action_start():
             camera_adjust_step = 0
         else:
             return
-    opc_ua_triger = 0
     uarm_state = Uarm_states.DETECT
 
 def position_check(ver):
@@ -1403,7 +1402,7 @@ states_switch = {
 def UARM_cmd_set(args):
     if (args[0] == 'switch'):
         return UARM_s.set_switch(args[1])
-    if (args[0] == 'restart'):
+    elif (args[0] == 'restart'):
         edge.ota.ota_rt_restart()
         return "ok"
     elif (args[0] == 'color'):
@@ -1524,11 +1523,12 @@ class UARM_states:
                            "color": "%s",\
                            "switch": "%s",\
                            "wifi": "%s",\
+                           "triger": "%s",\
                            "pump": "%s"}'
-        var = (self.position_0, self.position_1, self.position_2, self.joint_0, self.joint_1, self.joint_2, self.color, self.switch, self.wifi, self.pump)
+        var = (self.position_0, self.position_1, self.position_2, self.joint_0, self.joint_1, self.joint_2, self.color, self.switch, self.wifi, opc_ua_triger,self.pump)
         self.variable = obj.add_variable(idx, 'UARM_status', ua.Variant(self.str_var % var, ua.VariantType.String))
     def get_variable(self):
-        var = (self.position_0, self.position_1, self.position_2, self.joint_0, self.joint_1, self.joint_2, self.color, self.switch, self.wifi, self.pump)
+        var = (self.position_0, self.position_1, self.position_2, self.joint_0, self.joint_1, self.joint_2, self.color, self.switch, self.wifi,opc_ua_triger,self.pump)
         return ua.Variant(self.str_var % var,ua.VariantType.String)
     def update(self):
 	p = position_get()
@@ -1544,7 +1544,8 @@ class UARM_states:
         self.pump = h["pump"]
         self.variable.set_value(self.get_variable())
     def start(self):
-        self.timer = RepeatedTimer(1,self.update)
+        #self.timer = RepeatedTimer(1,self.update)
+        self.timer = timer_call(1,self.update)
         self.timer.start()
 
     def stop(self):
@@ -1553,6 +1554,7 @@ class UARM_states:
     def set_switch(self, s):
         global opc_ua_triger
         opc_ua_triger = s
+        print_log("set_opc_ua_triger %s " % s)
     
     def set_color(self, s):
         global color
